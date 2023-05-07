@@ -1,3 +1,5 @@
+use transducer::ReversibleList;
+
 fn main() {
-    println!("Hello, world!");
+    let _list: ReversibleList<u32> = ReversibleList::new();
 }
