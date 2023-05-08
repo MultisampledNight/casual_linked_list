@@ -1,5 +1,9 @@
 use reversible_list::ReversibleList;
 
 fn main() {
-    let _list: ReversibleList<u32> = ReversibleList::new();
+    let mut list: ReversibleList<u32> = ReversibleList::new();
+    dbg!(&list);
+
+    list.push_back(47);
+    dbg!(list);
 }

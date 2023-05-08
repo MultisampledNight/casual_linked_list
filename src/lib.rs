@@ -1,7 +1,8 @@
 use std::{marker::PhantomData, ptr::NonNull};
 
-type ElementPointer<'a, T> = NonNull<dyn Element<T> + 'a>;
+type ElementPointer<'a, T> = NonNull<dyn Element<'a, T> + 'a>;
 
+#[derive(Debug)]
 pub struct ReversibleList<'a, T> {
     start: NonNull<Head<'a, T>>,
     end: NonNull<Tail<'a, T>>,
@@ -15,20 +16,17 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
         //         0x1 is trivially not NULL, alignment isn't of matter since it's
         //         never read anyway
         let (start, end) = unsafe {
-            let start = Box::into_raw(Box::new(Head {
+            let start = allocate(Head {
                 next: NonNull::<Tail<T>>::dangling(),
                 _owns_by_value: PhantomData,
-            }));
-            let start = NonNull::new_unchecked(start);
+            });
 
-            let end = Box::into_raw(Box::new(Tail {
+            let end = allocate(Tail {
                 prev: start,
                 _owns_by_value: PhantomData,
-            }));
-            let end = NonNull::new_unchecked(end);
+            });
 
             (*start.as_ptr()).next = end;
-
             (start, end)
         };
 
@@ -49,9 +47,20 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
     }
 
     pub fn push_back(&mut self, item: T) {
-        let last_element = unsafe { (*self.end.as_ptr()).prev };
-
-        todo!()
+        // SAFETY:
+        // 1. lifetimes
+        //    Tail and Nodes are never leaked to the outside world and only created for the
+        //    list -- which lives definitely long enough, else this method would be
+        //    incallable
+        // 2. pointer validity
+        //    `self.end` is never invalidated and initialized only in `Self::new`,
+        //    `tail.prev` is only set by `Element::set_prev`, where its unsafe contract
+        //    must be upheld
+        let last_element = unsafe {
+            let tail = self.end.as_mut();
+            tail.prev.as_mut()
+        };
+        last_element.insert_after(item);
     }
 }
 
@@ -69,7 +78,7 @@ impl<T> Drop for ReversibleList<'_, T> {
 
 impl<'a, T: 'a> Default for ReversibleList<'a, T>
 where
-    T: 'a
+    T: 'a,
 {
     fn default() -> Self {
         Self::new()
@@ -78,9 +87,18 @@ where
 
 /// Rust is not suited at all for the composite pattern in such a low-level collection. But for fun
 /// and profit I'll use it here anyway.
-trait Element<T> {
+trait Element<'a, T: 'a> {
     fn data(&self) -> Option<&T>;
     fn data_mut(&mut self) -> Option<&mut T>;
+
+    fn insert_after(&mut self, item: T);
+    /// Sets the pointer to the previous element of this element to the given pointer.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `ptr` is a pointer to a valid node, and that the
+    /// previous node is appropiately dropped.
+    unsafe fn set_prev(&mut self, ptr: ElementPointer<'a, T>);
 }
 
 struct Head<'a, T> {
@@ -88,13 +106,34 @@ struct Head<'a, T> {
     _owns_by_value: PhantomData<T>,
 }
 
-impl<'a, T: 'a> Element<T> for Head<'a, T> {
+impl<'a, T: 'a> Element<'a, T> for Head<'a, T> {
     fn data(&self) -> Option<&T> {
         None
     }
 
     fn data_mut(&mut self) -> Option<&mut T> {
         None
+    }
+
+    fn insert_after(&mut self, item: T) {
+        let new_next = Node {
+            data: item,
+            // SAFETY: if &mut self would be null this method call would not work anyway
+            prev: unsafe { NonNull::new_unchecked(self) },
+            next: self.next,
+        };
+
+        let new_next = allocate(new_next);
+
+        // SAFETY: self.next and self.prev are *always* valid, since they're never
+        //         invalidated, only swapped with new pointers
+        unsafe {
+            (*self.next.as_ptr()).set_prev(new_next)
+        }
+    }
+
+    unsafe fn set_prev(&mut self, ptr: ElementPointer<'a, T>) {
+        panic!("head does not have any previous element, but tried to set {ptr:?}");
     }
 }
 
@@ -103,13 +142,21 @@ struct Tail<'a, T> {
     _owns_by_value: PhantomData<T>,
 }
 
-impl<'a, T: 'a> Element<T> for Tail<'a, T> {
+impl<'a, T: 'a> Element<'a, T> for Tail<'a, T> {
     fn data(&self) -> Option<&T> {
         None
     }
 
     fn data_mut(&mut self) -> Option<&mut T> {
         None
+    }
+
+    fn insert_after(&mut self, _item: T) {
+        panic!("no elements can be inserted *after* the tail");
+    }
+
+    unsafe fn set_prev(&mut self, ptr: ElementPointer<'a, T>) {
+        self.prev = ptr;
     }
 }
 
@@ -119,7 +166,7 @@ struct Node<'a, T> {
     next: ElementPointer<'a, T>,
 }
 
-impl<T> Element<T> for Node<'_, T> {
+impl<'a, T: 'a> Element<'a, T> for Node<'a, T> {
     fn data(&self) -> Option<&T> {
         Some(&self.data)
     }
@@ -127,4 +174,31 @@ impl<T> Element<T> for Node<'_, T> {
     fn data_mut(&mut self) -> Option<&mut T> {
         Some(&mut self.data)
     }
+
+    fn insert_after(&mut self, item: T) {
+        let new_next = Node {
+            data: item,
+            // SAFETY: if &mut self would be null this method call would not work anyway
+            prev: unsafe { NonNull::new_unchecked(self) },
+            next: self.next,
+        };
+
+        let new_next = allocate(new_next);
+
+        // SAFETY: self.next and self.prev are *always* valid, since they're never
+        //         invalidated, only swapped with new pointers
+        unsafe {
+            (*self.next.as_ptr()).set_prev(new_next)
+        }
+    }
+
+    unsafe fn set_prev(&mut self, ptr: ElementPointer<'a, T>) {
+        self.prev = ptr;
+    }
+}
+
+fn allocate<T>(item: T) -> NonNull<T> {
+    let ptr = Box::into_raw(Box::new(item));
+    // SAFETY: `Box::into_raw` always returns a non-null pointer according to the docs
+    unsafe { NonNull::new_unchecked(ptr) }
 }
