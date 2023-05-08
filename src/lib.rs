@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, ptr::NonNull};
+use std::{marker::PhantomData, mem, ptr::NonNull};
 
 type ElementPointer<'a, T> = NonNull<dyn Element<'a, T> + 'a>;
 
@@ -61,25 +61,28 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
             tail.prev.as_mut()
         };
         last_element.insert_after(item);
+        self.len += 1;
     }
 }
 
-impl<T> Drop for ReversibleList<'_, T> {
+impl<'a, T: 'a> Drop for ReversibleList<'a, T> {
     fn drop(&mut self) {
-        // SAFETY: boxes have been previously allocated in `Self::new` and can only be
-        //         dropped here -- since this is the Drop impl
-        //         additionally, `start` and `end` aren't exposed
+        // SAFETY: boxes are only allocated in either `Element::insert_after` or in
+        //         `Self::new`, but either are never exposed
+        //         nodes from `Element::insert_after` _are_ deallocated when removing, but
+        //         won't show up in iteration
+        let mut element = self.start.as_ptr() as *mut dyn Element<'a, T>;
         unsafe {
-            drop(Box::from_raw(self.start.as_ptr()));
-            drop(Box::from_raw(self.end.as_ptr()));
+            while let Some(next) = (*element).next() {
+                let old = mem::replace(&mut element, next.as_ptr());
+                drop(Box::from_raw(old));
+            }
+            drop(Box::from_raw(element));
         }
     }
 }
 
-impl<'a, T: 'a> Default for ReversibleList<'a, T>
-where
-    T: 'a,
-{
+impl<'a, T: 'a> Default for ReversibleList<'a, T> {
     fn default() -> Self {
         Self::new()
     }
@@ -90,8 +93,10 @@ where
 trait Element<'a, T: 'a> {
     fn data(&self) -> Option<&T>;
     fn data_mut(&mut self) -> Option<&mut T>;
+    fn next(&self) -> Option<ElementPointer<'a, T>>;
 
     fn insert_after(&mut self, item: T);
+
     /// Sets the pointer to the previous element of this element to the given pointer.
     ///
     /// # Safety
@@ -115,20 +120,23 @@ impl<'a, T: 'a> Element<'a, T> for Head<'a, T> {
         None
     }
 
+    fn next(&self) -> Option<ElementPointer<'a, T>> {
+        Some(self.next)
+    }
+
     fn insert_after(&mut self, item: T) {
-        let new_next = Node {
+        let new_next = allocate(Node {
             data: item,
             // SAFETY: if &mut self would be null this method call would not work anyway
             prev: unsafe { NonNull::new_unchecked(self) },
             next: self.next,
-        };
-
-        let new_next = allocate(new_next);
+        });
 
         // SAFETY: self.next and self.prev are *always* valid, since they're never
         //         invalidated, only swapped with new pointers
         unsafe {
-            (*self.next.as_ptr()).set_prev(new_next)
+            (*self.next.as_ptr()).set_prev(new_next);
+            self.next = new_next;
         }
     }
 
@@ -148,6 +156,10 @@ impl<'a, T: 'a> Element<'a, T> for Tail<'a, T> {
     }
 
     fn data_mut(&mut self) -> Option<&mut T> {
+        None
+    }
+
+    fn next(&self) -> Option<ElementPointer<'a, T>> {
         None
     }
 
@@ -175,6 +187,10 @@ impl<'a, T: 'a> Element<'a, T> for Node<'a, T> {
         Some(&mut self.data)
     }
 
+    fn next(&self) -> Option<ElementPointer<'a, T>> {
+        Some(self.next)
+    }
+
     fn insert_after(&mut self, item: T) {
         let new_next = Node {
             data: item,
@@ -187,9 +203,7 @@ impl<'a, T: 'a> Element<'a, T> for Node<'a, T> {
 
         // SAFETY: self.next and self.prev are *always* valid, since they're never
         //         invalidated, only swapped with new pointers
-        unsafe {
-            (*self.next.as_ptr()).set_prev(new_next)
-        }
+        unsafe { (*self.next.as_ptr()).set_prev(new_next) }
     }
 
     unsafe fn set_prev(&mut self, ptr: ElementPointer<'a, T>) {
