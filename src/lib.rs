@@ -55,6 +55,18 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
     }
 }
 
+impl<T> Drop for ReversibleList<'_, T> {
+    fn drop(&mut self) {
+        // SAFETY: boxes have been previously allocated in `Self::new` and can only be
+        //         dropped here -- since this is the Drop impl
+        //         additionally, `start` and `end` aren't exposed
+        unsafe {
+            drop(Box::from_raw(self.start.as_ptr()));
+            drop(Box::from_raw(self.end.as_ptr()));
+        }
+    }
+}
+
 impl<'a, T: 'a> Default for ReversibleList<'a, T>
 where
     T: 'a
