@@ -10,5 +10,13 @@ fn main() {
     list.push_back(10);
     list.push_front(84);
 
+    list.pop_front();
+    list.pop_front();
+    list.pop_back();
+    list.pop_front();
+
+    list.push_front(0);
+    list.push_back(2);
+
     dbg!(&list);
 }

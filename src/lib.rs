@@ -46,6 +46,7 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
         iter::Iter::new(start, end)
     }
 
+    /// Appends the given item to the end of the list, should complete in _O_(_1_).
     pub fn push_front(&mut self, item: T) {
         // SAFETY: `self.start` is never invalidated and initialized only in `Self::new`,
         // `head.next` is only set by `Element::set_next`, where its unsafe contract must be upheld
@@ -54,6 +55,7 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
         }
     }
 
+    /// Inserts the given item before the first element of the list, should complete in _O_(_1_).
     pub fn push_back(&mut self, item: T) {
         // SAFETY: `self.end` is never invalidated and initialized only in `Self::new`,
         // `tail.prev` is only set by `Element::set_prev`, where its unsafe contract must be upheld
@@ -62,13 +64,15 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
         }
     }
 
+    /// Inserts the given element in the given direction of the anchor element.
+    ///
     /// # Safety
     ///
-    /// `anchor` must be a valid, well-aligned pointer.
+    /// `anchor` must be a valid, well-aligned pointer to a list element owned by this list.
     ///
     /// # Panics
     ///
-    /// Panics if `anchor` is the sentinel tail or sentinel head element, and `direction` points
+    /// Panics if `anchor` is the sentinel tail or head element, and `direction` points
     /// away from the rest of the list.
     unsafe fn insert_in_dir(
         &mut self,
@@ -99,6 +103,55 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
 
         self.len += 1;
     }
+
+    /// Removes the element at the beginning of the list, should complete in _O_(_1_).
+    pub fn pop_front(&mut self) -> Option<T> {
+        // SAFETY: Exact same as `Self::push_front`.
+        if self.is_empty() {
+            return None;
+        }
+
+        unsafe {
+            let first = self.start.as_ref().next;
+            Some(self.pop(first))
+        }
+    }
+
+    /// Removes the element at the end of the list, should complete in _O_(_1_).
+    pub fn pop_back(&mut self) -> Option<T> {
+        // SAFETY: Exact same as `Self::push_back`.
+        if self.is_empty() {
+            return None;
+        }
+
+        unsafe {
+            let last = self.end.as_ref().prev;
+            Some(self.pop(last))
+        }
+    }
+
+    /// Removes the given element by first deallocating the node, then unlinking it.
+    ///
+    /// # Safety
+    ///
+    /// `ele` must be a valid, well-aligned pointer to a list element owned by this list.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ele` is the sentinel head or tail element.
+    unsafe fn pop(&mut self, ele: ElementPointer<'a, T>) -> T {
+        let (Some(mut before_ele), Some(mut after_ele)) = retrieve_paired_elements(ele, Pair::Surrounding)
+        else {
+            panic!("tried to pop sentinel head or tail");
+        };
+
+        before_ele.as_mut().set_next(after_ele);
+        after_ele.as_mut().set_prev(before_ele);
+
+        self.len -= 1;
+        let reboxed = Box::from_raw(ele.as_ptr());
+        reboxed.into_data().unwrap()
+    }
 }
 
 enum Direction {
@@ -117,7 +170,7 @@ enum Pair {
 ///
 /// # Safety
 ///
-/// The caller must ensure that `anchor` refers to a valid list element.
+/// `anchor` must be a valid, well-aligned pointer to a list element.
 unsafe fn retrieve_paired_elements<'a, T: 'a>(
     anchor: ElementPointer<'a, T>,
     which: Pair,
@@ -159,10 +212,10 @@ impl<'a, T: 'a> Default for ReversibleList<'a, T> {
 
 impl<'a, T: 'a> Drop for ReversibleList<'a, T> {
     fn drop(&mut self) {
-        // SAFETY: boxes are only allocated in either `Self::push_*` or in
-        //         `Self::new`, but either are never exposed
-        //         nodes from `Self::push_*` _are_ deallocated when removing, but
-        //         won't show up in iteration
+        // SAFETY: boxes are only allocated in either `Self::insert_in_dir` or in `Self::new`,
+        //         but either are never exposed
+        //         nodes from `Self::push_*` _are_ deallocated with `Self::pop`,
+        //         but are also unlinked and made inaccessible
         let mut element = self.start.as_ptr() as *mut dyn Element<'a, T>;
         unsafe {
             while let Some(next) = (*element).next() {
@@ -179,6 +232,7 @@ impl<'a, T: 'a> Drop for ReversibleList<'a, T> {
 trait Element<'a, T: 'a> {
     fn data(&self) -> Option<&T>;
     fn data_mut(&mut self) -> Option<&mut T>;
+    fn into_data(self: Box<Self>) -> Option<T>;
     fn prev(&self) -> Option<ElementPointer<'a, T>>;
     fn next(&self) -> Option<ElementPointer<'a, T>>;
 
@@ -212,6 +266,10 @@ impl<'a, T: 'a> Element<'a, T> for Head<'a, T> {
         None
     }
 
+    fn into_data(self: Box<Self>) -> Option<T> {
+        None
+    }
+
     fn prev(&self) -> Option<ElementPointer<'a, T>> {
         None
     }
@@ -239,6 +297,10 @@ impl<'a, T: 'a> Element<'a, T> for Tail<'a, T> {
     }
 
     fn data_mut(&mut self) -> Option<&mut T> {
+        None
+    }
+
+    fn into_data(self: Box<Self>) -> Option<T> {
         None
     }
 
@@ -272,6 +334,10 @@ impl<'a, T: 'a> Element<'a, T> for Node<'a, T> {
 
     fn data_mut(&mut self) -> Option<&mut T> {
         Some(&mut self.data)
+    }
+
+    fn into_data(self: Box<Self>) -> Option<T> {
+        Some(self.data)
     }
 
     fn prev(&self) -> Option<ElementPointer<'a, T>> {
