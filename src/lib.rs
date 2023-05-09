@@ -38,6 +38,14 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
         self.len == 0
     }
 
+    pub fn iter(&self) -> iter::Iter<'a, T> {
+        // SAFETY: 'a is the lifetime of the whole list,
+        //         and `Iter` is bound by it --- will not ever be leaked
+        let start = unsafe { self.start.as_ref().next };
+        let end = unsafe { self.end.as_ref().prev };
+        iter::Iter::new(start, end)
+    }
+
     pub fn push_front(&mut self, item: T) {
         // SAFETY: `self.start` is never invalidated and initialized only in `Self::new`,
         // `head.next` is only set by `Element::set_next`, where its unsafe contract must be upheld
@@ -57,27 +65,21 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
     /// # Safety
     ///
     /// `anchor` must be a valid, well-aligned pointer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `anchor` is the sentinel tail or sentinel head element, and `direction` points
+    /// away from the rest of the list.
     unsafe fn insert_in_dir(
         &mut self,
         anchor: ElementPointer<'a, T>,
         direction: Direction,
         item: T,
     ) {
-        let (mut prev_for_new, mut next_for_new) = match direction {
-            Direction::Before => {
-                let ele_before_anchor = anchor
-                    .as_ref()
-                    .prev()
-                    .expect("tried to insert node before head");
-                (ele_before_anchor, anchor)
-            }
-            Direction::After => {
-                let ele_after_anchor = anchor
-                    .as_ref()
-                    .next()
-                    .expect("tried to insert node after tail");
-                (anchor, ele_after_anchor)
-            }
+        let (Some(mut prev_for_new), Some(mut next_for_new)) =
+            retrieve_paired_elements(anchor, Pair::AnchorAnd(direction))
+        else {
+            panic!("tried to insert element in impossible relation to sentinel element");
         };
 
         let new_next = allocate(Node {
@@ -97,19 +99,50 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
 
         self.len += 1;
     }
-
-    pub fn iter(&self) -> iter::Iter<'a, T> {
-        // SAFETY: 'a is the lifetime of the whole list,
-        //         and `Iter` is bound by it --- will not ever be leaked
-        let start = unsafe { self.start.as_ref().next };
-        let end = unsafe { self.end.as_ref().prev };
-        iter::Iter::new(start, end)
-    }
 }
 
 enum Direction {
     Before,
     After,
+}
+
+enum Pair {
+    AnchorAnd(Direction),
+    Surrounding,
+}
+
+/// Retrieves the given pair in relation to the given anchor list element. The returned tuple
+/// refers to a pair of `(left, right)`, in terms where "next" is "right-hand". If the relative
+/// element is inaccessible due to the anchor being the last/first element, it'll be `None`.
+///
+/// # Safety
+///
+/// The caller must ensure that `anchor` refers to a valid list element.
+unsafe fn retrieve_paired_elements<'a, T: 'a>(
+    anchor: ElementPointer<'a, T>,
+    which: Pair,
+) -> (Option<ElementPointer<'a, T>>, Option<ElementPointer<'a, T>>) {
+    match which {
+        Pair::AnchorAnd(Direction::Before) => {
+            let ele_before_anchor = anchor.as_ref().prev();
+            (ele_before_anchor, Some(anchor))
+        }
+        Pair::AnchorAnd(Direction::After) => {
+            let ele_after_anchor = anchor.as_ref().next();
+            (Some(anchor), ele_after_anchor)
+        }
+        Pair::Surrounding => {
+            let ele_before_anchor = anchor.as_ref().prev();
+            let ele_after_anchor = anchor.as_ref().next();
+            (ele_before_anchor, ele_after_anchor)
+        }
+    }
+}
+
+fn allocate<T>(item: T) -> NonNull<T> {
+    let ptr = Box::into_raw(Box::new(item));
+    // SAFETY: `Box::into_raw` always returns a non-null pointer according to the docs
+    unsafe { NonNull::new_unchecked(ptr) }
 }
 
 impl<'a, T: fmt::Debug + 'a> fmt::Debug for ReversibleList<'a, T> {
@@ -149,13 +182,20 @@ trait Element<'a, T: 'a> {
     fn prev(&self) -> Option<ElementPointer<'a, T>>;
     fn next(&self) -> Option<ElementPointer<'a, T>>;
 
-    /// Sets the pointer to the previous element of this element to the given pointer.
+    /// Sets the pointer to the previous element to the given pointer.
     ///
     /// # Safety
     ///
     /// The caller must ensure that `ptr` is a pointer to a valid node, and that the
-    /// previous node is appropiately dropped.
+    /// previous node is appropiately dropped if not used otherwise.
     unsafe fn set_prev(&mut self, ptr: ElementPointer<'a, T>);
+
+    /// Sets the pointer to the next element to the given pointer.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that `ptr` is a pointer to a valid node, and that the
+    /// previous node is appropiately dropped if not used otherwise.
     unsafe fn set_next(&mut self, ptr: ElementPointer<'a, T>);
 }
 
@@ -249,10 +289,4 @@ impl<'a, T: 'a> Element<'a, T> for Node<'a, T> {
     unsafe fn set_next(&mut self, ptr: ElementPointer<'a, T>) {
         self.next = ptr;
     }
-}
-
-fn allocate<T>(item: T) -> NonNull<T> {
-    let ptr = Box::into_raw(Box::new(item));
-    // SAFETY: `Box::into_raw` always returns a non-null pointer according to the docs
-    unsafe { NonNull::new_unchecked(ptr) }
 }
