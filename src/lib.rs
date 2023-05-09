@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 pub mod iter;
 
 use std::{fmt, mem, ptr::NonNull};

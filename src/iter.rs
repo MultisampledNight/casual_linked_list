@@ -1,6 +1,6 @@
 //! An ASCII diagram showing the initial situation for fun and profit:
 //!
-//! ```
+//! ```text
 //!  forward_node               backward_node
 //!            |                 |
 //!            v                 v
