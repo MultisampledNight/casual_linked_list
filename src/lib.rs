@@ -35,35 +35,61 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
         self.len == 0
     }
 
+    pub fn push_front(&mut self, item: T) {
+        // SAFETY: `self.start` is never invalidated and initialized only in `Self::new`,
+        // `head.next` is only set by `Element::set_next`, where its unsafe contract must be upheld
+        unsafe {
+            self.insert_in_dir(self.start.as_ref().next, Direction::Before, item);
+        }
+    }
+
     pub fn push_back(&mut self, item: T) {
         // SAFETY: `self.end` is never invalidated and initialized only in `Self::new`,
         // `tail.prev` is only set by `Element::set_prev`, where its unsafe contract must be upheld
         unsafe {
-            self.insert_after(self.end.as_ref().prev, item);
+            self.insert_in_dir(self.end.as_ref().prev, Direction::After, item);
         }
     }
 
     /// # Safety
     ///
     /// `anchor` must be a valid, well-aligned pointer.
-    unsafe fn insert_after(&mut self, mut anchor: ElementPointer<'a, T>, item: T) {
-        let mut ele_after_anchor = anchor
-            .as_ref()
-            .next()
-            .expect("tried to insert node after tail");
+    unsafe fn insert_in_dir(
+        &mut self,
+        anchor: ElementPointer<'a, T>,
+        direction: Direction,
+        item: T,
+    ) {
+        let (mut prev_for_new, mut next_for_new) = match direction {
+            Direction::Before => {
+                let ele_before_anchor = anchor
+                    .as_ref()
+                    .prev()
+                    .expect("tried to insert node before head");
+                (ele_before_anchor, anchor)
+            }
+            Direction::After => {
+                let ele_after_anchor = anchor
+                    .as_ref()
+                    .next()
+                    .expect("tried to insert node after tail");
+                (anchor, ele_after_anchor)
+            }
+        };
 
         let new_next = allocate(Node {
             data: item,
-            prev: anchor,
-            next: ele_after_anchor,
+            prev: prev_for_new,
+            next: next_for_new,
         });
 
         // SAFETY: Node.next and Node.prev are only mutated by `Element::set_next` and
-        //         `Element::set_prev`, where the caller has to uphold the safety contract
-        //         `new_next` was just created from `Box::into_raw` in `allocate`
+        //         `Element::set_prev`, where the caller has to uphold the safety contract.
+        //         `new_next` was just created from `Box::into_raw` in `allocate`,
+        //         guaranteeing validity.
         unsafe {
-            ele_after_anchor.as_mut().set_prev(new_next);
-            anchor.as_mut().set_next(new_next);
+            prev_for_new.as_mut().set_next(new_next);
+            next_for_new.as_mut().set_prev(new_next);
         }
 
         self.len += 1;
@@ -76,6 +102,11 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
         let end = unsafe { self.end.as_ref().prev };
         iter::Iter::new(start, end)
     }
+}
+
+enum Direction {
+    Before,
+    After,
 }
 
 impl<'a, T: fmt::Debug + 'a> fmt::Debug for ReversibleList<'a, T> {

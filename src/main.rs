@@ -5,8 +5,10 @@ fn main() {
     dbg!(&list);
 
     list.push_back(47);
-    list.push_back(69);
-    list.push_back(3);
+    list.push_back(1000);
+    list.push_front(4);
+    list.push_back(10);
+    list.push_front(84);
 
     dbg!(&list);
 }
