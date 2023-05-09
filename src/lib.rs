@@ -1,6 +1,6 @@
 pub mod iter;
 
-use std::{fmt, marker::PhantomData, mem, ptr::NonNull};
+use std::{fmt, mem, ptr::NonNull};
 
 type ElementPointer<'a, T> = NonNull<dyn Element<'a, T> + 'a>;
 
@@ -8,35 +8,23 @@ pub struct ReversibleList<'a, T> {
     start: NonNull<Head<'a, T>>,
     end: NonNull<Tail<'a, T>>,
     len: usize,
-    _owns_by_value: PhantomData<T>,
 }
 
 impl<'a, T: 'a> ReversibleList<'a, T> {
     pub fn new() -> Self {
-        // SAFETY: Box::into_raw guarantees non-nullness
-        //         0x1 is trivially not NULL, alignment isn't of matter since it's
-        //         never read anyway
+        // SAFETY: `Box::into_raw` from `allocate` guarantees non-nullness
         let (start, end) = unsafe {
             let start = allocate(Head {
                 next: NonNull::<Tail<T>>::dangling(),
-                _owns_by_value: PhantomData,
             });
 
-            let end = allocate(Tail {
-                prev: start,
-                _owns_by_value: PhantomData,
-            });
+            let end = allocate(Tail { prev: start });
 
             (*start.as_ptr()).next = end;
             (start, end)
         };
 
-        Self {
-            start,
-            end,
-            len: 0,
-            _owns_by_value: PhantomData,
-        }
+        Self { start, end, len: 0 }
     }
 
     pub fn len(&self) -> usize {
@@ -139,7 +127,6 @@ trait Element<'a, T: 'a> {
 
 struct Head<'a, T> {
     next: ElementPointer<'a, T>,
-    _owns_by_value: PhantomData<T>,
 }
 
 impl<'a, T: 'a> Element<'a, T> for Head<'a, T> {
@@ -170,7 +157,6 @@ impl<'a, T: 'a> Element<'a, T> for Head<'a, T> {
 
 struct Tail<'a, T> {
     prev: ElementPointer<'a, T>,
-    _owns_by_value: PhantomData<T>,
 }
 
 impl<'a, T: 'a> Element<'a, T> for Tail<'a, T> {
