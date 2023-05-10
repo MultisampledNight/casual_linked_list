@@ -36,6 +36,10 @@ enum Direction {
 }
 
 impl<'list, T: 'list> UndistortedIter<'list, T> {
+    /// # Safety
+    ///
+    /// The caller must ensure that the given two nodes are start and end of a valid linked
+    /// list.
     pub(crate) unsafe fn new(
         forward_start: MaybePointer<T>,
         backward_start: MaybePointer<T>,

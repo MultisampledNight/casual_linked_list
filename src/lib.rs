@@ -47,7 +47,19 @@ impl<T> ReversibleList<T> {
     pub fn undistorted_iter(&self) -> iter::UndistortedIter<'_, T> {
         // SAFETY: '_ is the lifetime of this list reference
         //         and `Iter` is bound by it --- will not ever be leaked
+        //         pointers are only mutated through `Self::insert_in_dir` and
+        //         `Self::pop`, which both preserve a valid linked list
         unsafe { iter::UndistortedIter::new(self.start, self.end) }
+    }
+
+    pub fn undistorted_cursor_front(&self) -> cursor::UndistortedCursor<'_, T> {
+        // SAFETY: Same as `Self::undistorted_iter`.
+        unsafe { cursor::UndistortedCursor::new_front(self) }
+    }
+
+    pub fn undistorted_cursor_back(&self) -> cursor::UndistortedCursor<'_, T> {
+        // SAFETY: Same as `Self::undistorted_iter`.
+        unsafe { cursor::UndistortedCursor::new_back(self) }
     }
 
     /// Appends the given item to the end of the list, should complete in _O_(1).

@@ -55,3 +55,35 @@ fn snake_and_reverse() {
     assert_eq!(snake.pop_front(), None);
     assert_eq!(snake.pop_back(), None);
 }
+
+#[test]
+fn curious_cursors() {
+    let mut list = ReversibleList::new();
+    list.push_back("rainbow-striped button");
+    list.push_back("wall");
+    list.push_back("the light switch");
+    list.push_back("a few doors producing music");
+    list.push_back("hyperbolic pillow");
+
+    // then let's take a look around the room
+    let mut player = list.undistorted_cursor_front();
+    assert_eq!(player.current(), Some(&"rainbow-striped button"));
+    player.move_next();
+    assert_eq!(player.current(), Some(&"wall"));
+    player.move_prev();
+    assert_eq!(player.current(), Some(&"rainbow-striped button"));
+    player.move_prev();
+    assert_eq!(player.current(), None);
+    player.move_prev();
+    assert_eq!(player.current(), Some(&"hyperbolic pillow"));
+    player.move_prev();
+    assert_eq!(player.current(), Some(&"a few doors producing music"));
+
+    player.move_next();
+    player.move_next();
+    player.move_next();
+    player.move_next();
+    player.move_next();
+
+    assert_eq!(player.current(), Some(&"the light switch"));
+}
