@@ -31,8 +31,12 @@ use std::marker::PhantomData;
 
 use crate::MaybePointer;
 
-/// Immutable edition.
-pub struct Cursor<'a, T> {
+/// Immutable edition. **Ignores** any past calls to [`ReversibleList::reverse`], like
+/// [`ReversibleList::undistorted_iter`], see its documentation for details.
+///
+/// [`ReversibleList::reverse`]: crate::ReversibleList::reverse
+/// [`ReversibleList::undistorted_iter`]: crate::ReversibleList::undistorted_iter
+pub struct UndistortedCursor<'a, T> {
     _ele: MaybePointer<T>,
     _index: usize,
     _bound_to_list: PhantomData<&'a ()>,

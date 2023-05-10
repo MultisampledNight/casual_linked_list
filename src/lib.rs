@@ -41,11 +41,13 @@ impl<T> ReversibleList<T> {
         self.len == 0
     }
 
+    /// Iterates through this list while **ignoring** any past calls to
+    /// [`Self::reverse`], which might lead to unexpected element positions.
     #[must_use]
-    pub fn iter(&self) -> iter::Iter<'_, T> {
-        // SAFETY: 'a is the lifetime of this list reference
+    pub fn undistorted_iter(&self) -> iter::UndistortedIter<'_, T> {
+        // SAFETY: '_ is the lifetime of this list reference
         //         and `Iter` is bound by it --- will not ever be leaked
-        unsafe { iter::Iter::new(self.start, self.end) }
+        unsafe { iter::UndistortedIter::new(self.start, self.end) }
     }
 
     /// Appends the given item to the end of the list, should complete in _O_(1).
@@ -212,7 +214,7 @@ fn allocate<T>(item: T) -> NonNull<T> {
 
 impl<T: fmt::Debug> fmt::Debug for ReversibleList<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list().entries(self.iter()).finish()
+        f.debug_list().entries(self.undistorted_iter()).finish()
     }
 }
 

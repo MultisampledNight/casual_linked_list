@@ -5,7 +5,7 @@ fn casual_push_and_observe() {
     let mut list = ReversibleList::new();
 
     list.push_back("owo");
-    assert_eq!(list.iter().collect::<Vec<_>>(), vec![&"owo"]);
+    assert_eq!(list.undistorted_iter().collect::<Vec<_>>(), vec![&"owo"]);
 
     list.push_front("uwu");
     list.push_front("kwk");
@@ -14,11 +14,11 @@ fn casual_push_and_observe() {
     list.push_back("qwq");
 
     assert_eq!(
-        list.iter().collect::<Vec<_>>(),
+        list.undistorted_iter().collect::<Vec<_>>(),
         vec![&"-w-", &"kwk", &"uwu", &"owo", &"xwx", &"qwq"]
     );
     assert_eq!(
-        list.iter().rev().collect::<Vec<_>>(),
+        list.undistorted_iter().rev().collect::<Vec<_>>(),
         vec![&"qwq", &"xwx", &"owo", &"uwu", &"kwk", &"-w-"]
     );
 }
@@ -41,9 +41,9 @@ fn snake_and_reverse() {
 
     snake.push_front(1);
 
-    assert_eq!(snake.iter().sum::<i32>(), snake.iter().rev().sum());
+    assert_eq!(snake.undistorted_iter().sum::<i32>(), snake.undistorted_iter().rev().sum());
     assert_eq!(
-        snake.iter().copied().collect::<Vec<_>>(),
+        snake.undistorted_iter().copied().collect::<Vec<_>>(),
         vec![1, -45, 10, 1_000_000]
     );
 
