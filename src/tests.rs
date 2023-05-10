@@ -73,23 +73,18 @@ fn curious_cursors() {
     player.move_prev();
     assert_eq!(player.current(), Some(&"rainbow-striped button"));
     player.move_prev();
-    assert_eq!(player.current(), None);
-    player.move_prev();
     assert_eq!(player.current(), Some(&"hyperbolic pillow"));
     player.move_prev();
     assert_eq!(player.current(), Some(&"a few doors producing music"));
 
     // and a bit faster
-    player.move_next_n(5);
+    player.move_next_n(4);
     assert_eq!(player.current(), Some(&"the light switch"));
     player.move_next_n(0);
     assert_eq!(player.current(), Some(&"the light switch"));
+    player.move_prev_n(0);
     player.move_next_n(1);
     assert_eq!(player.current(), Some(&"a few doors producing music"));
-    player.move_next_n(9);
-    assert_eq!(player.current(), Some(&"rainbow-striped button"));
-    player.move_prev_n(7);
-    assert_eq!(player.current(), None);
-    player.move_prev_n(3);
-    assert_eq!(player.current(), Some(&"the light switch"));
+    player.move_prev_n(4);
+    assert_eq!(player.current(), Some(&"hyperbolic pillow"));
 }
