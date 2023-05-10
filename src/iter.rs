@@ -29,6 +29,7 @@ pub struct Iter<'list, T: 'list> {
     _bound_to_list: PhantomData<&'list ()>,
 }
 
+#[derive(Clone, Copy)]
 enum Direction {
     Forward,
     Backward,

@@ -15,7 +15,14 @@ pub struct ReversibleList<T> {
     len: usize,
 }
 
+struct Node<T> {
+    data: T,
+    prev: MaybePointer<T>,
+    next: MaybePointer<T>,
+}
+
 impl<T> ReversibleList<T> {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             start: None,
@@ -24,15 +31,18 @@ impl<T> ReversibleList<T> {
         }
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.len
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
 
-    pub fn iter<'a>(&'a self) -> iter::Iter<'a, T> {
+    #[must_use]
+    pub fn iter(&self) -> iter::Iter<'_, T> {
         // SAFETY: 'a is the lifetime of this list reference
         //         and `Iter` is bound by it --- will not ever be leaked
         unsafe { iter::Iter::new(self.start, self.end) }
@@ -154,11 +164,13 @@ impl<T> ReversibleList<T> {
     }
 }
 
+#[derive(Clone, Copy)]
 enum Direction {
     Before,
     After,
 }
 
+#[derive(Clone, Copy)]
 enum Pair {
     AnchorAnd(Direction),
     Surrounding,
@@ -229,10 +241,4 @@ impl<T> Drop for ReversibleList<T> {
             drop(Box::from_raw(element));
         }
     }
-}
-
-struct Node<T> {
-    data: T,
-    prev: MaybePointer<T>,
-    next: MaybePointer<T>,
 }
