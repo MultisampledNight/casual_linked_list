@@ -100,4 +100,6 @@ fn curious_cursors() {
     assert_eq!(player.current(), Some(&"the light switch"));
     player.move_to(3);
     assert_eq!(player.current(), Some(&"a few doors producing music"));
+    player.move_to(3);
+    assert_eq!(player.current(), Some(&"a few doors producing music"));
 }
