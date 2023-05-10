@@ -10,12 +10,12 @@
 //!
 //! If you move the pointer past the list (by using [`move_back`] while on the last element) or
 //! before the list (by using [`move_front`] while on the first element), the pointer is placed
-//! on a _ghost_ element. While on that ghost element,
+//! on a _ghost_ node. While on that _ghost_ node,
 //!
 //! - [`current`] and [`index`] return [`None`].
-//! - When moving **forward** while on that ghost element, the cursor is placed on the **start** of
+//! - When moving **forward** while on that _ghost_ node, the cursor is placed on the **start** of
 //!   the list.
-//! - When moving **backward** while on that ghost element, the the cursor is placed on the **end**
+//! - When moving **backward** while on that _ghost_ node, the the cursor is placed on the **end**
 //!   of the list.
 //!
 //! One last thing, there are multiple cursor types:
@@ -27,7 +27,7 @@
 //! [`index`]: Cursor::index
 //! [`None`]: Option::None
 
-use crate::{MaybePointer, ReversibleList, Direction};
+use crate::{MaybePointer, ReversibleList};
 
 /// Immutable edition. **Ignores** any past calls to [`ReversibleList::reverse`], like
 /// [`ReversibleList::undistorted_iter`], see its documentation for details.
@@ -96,6 +96,23 @@ impl<'a, T: 'a> UndistortedCursor<'a, T> {
                 // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`.
                 self.node = unsafe { (*current.as_ptr()).next };
             },
+        }
+    }
+
+    /// Moves this cursor `n` nodes backward, **including** the _ghost_ node.
+    pub fn move_prev_n(&mut self, n: usize) {
+        // filter out how many times we we really need to move
+        let n = n % (self.list.len + 1);
+        for _ in 0..n {
+            self.move_prev();
+        }
+    }
+
+    /// Moves this cursor `n` nodes forward, **including** the _ghost_ node.
+    pub fn move_next_n(&mut self, n: usize) {
+        let n = n % (self.list.len + 1);
+        for _ in 0..n {
+            self.move_next();
         }
     }
 }
