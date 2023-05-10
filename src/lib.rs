@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests;
 
+pub mod cursor;
 pub mod iter;
 
 use std::{fmt, mem, ptr::NonNull};
@@ -46,7 +47,7 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
         iter::Iter::new(start, end)
     }
 
-    /// Appends the given item to the end of the list, should complete in _O_(_1_).
+    /// Appends the given item to the end of the list, should complete in _O_(1).
     pub fn push_front(&mut self, item: T) {
         // SAFETY: `self.start` is never invalidated and initialized only in `Self::new`
         unsafe {
@@ -54,7 +55,7 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
         }
     }
 
-    /// Inserts the given item before the first element of the list, should complete in _O_(_1_).
+    /// Inserts the given item before the first element of the list, should complete in _O_(1).
     pub fn push_back(&mut self, item: T) {
         // SAFETY: `self.end` is never invalidated and initialized only in `Self::new`
         unsafe {
@@ -102,7 +103,7 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
         self.len += 1;
     }
 
-    /// Removes the element at the beginning of the list, should complete in _O_(_1_).
+    /// Removes the element at the beginning of the list, should complete in _O_(1).
     pub fn pop_front(&mut self) -> Option<T> {
         // SAFETY: Same as `Self::push_front`,
         //         additionally `Head.next` is only changed by `Element::set_next`,
@@ -117,7 +118,7 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
         }
     }
 
-    /// Removes the element at the end of the list, should complete in _O_(_1_).
+    /// Removes the element at the end of the list, should complete in _O_(1).
     pub fn pop_back(&mut self) -> Option<T> {
         // SAFETY: Same as `Self::push_back`.
         //         additionally `Tail.prev` is only changed by `Element::set_prev`,
@@ -238,6 +239,8 @@ trait Element<'a, T: 'a> {
     fn prev(&self) -> Option<ElementPointer<'a, T>>;
     fn next(&self) -> Option<ElementPointer<'a, T>>;
 
+    fn is_sentinel(&self) -> bool;
+
     /// Sets the pointer to the previous element to the given pointer.
     ///
     /// # Safety
@@ -287,6 +290,10 @@ impl<'a, T: 'a> Element<'a, T> for Head<'a, T> {
     unsafe fn set_next(&mut self, ptr: ElementPointer<'a, T>) {
         self.next = ptr;
     }
+
+    fn is_sentinel(&self) -> bool {
+        true
+    }
 }
 
 struct Tail<'a, T> {
@@ -320,6 +327,10 @@ impl<'a, T: 'a> Element<'a, T> for Tail<'a, T> {
 
     unsafe fn set_next(&mut self, ptr: ElementPointer<'a, T>) {
         panic!("tail does not have any next element, but tried to set {ptr:?}");
+    }
+
+    fn is_sentinel(&self) -> bool {
+        true
     }
 }
 
@@ -356,5 +367,9 @@ impl<'a, T: 'a> Element<'a, T> for Node<'a, T> {
 
     unsafe fn set_next(&mut self, ptr: ElementPointer<'a, T>) {
         self.next = ptr;
+    }
+
+    fn is_sentinel(&self) -> bool {
+        false
     }
 }

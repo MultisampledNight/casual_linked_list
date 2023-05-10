@@ -1,3 +1,5 @@
+//! All iterator structs. You'll rarely want to use these directly.
+//!
 //! An ASCII diagram showing the initial situation for fun and profit:
 //!
 //! ```text
