@@ -31,6 +31,11 @@
 //! [`index`]: Cursor::index
 //! [`None`]: Option::None
 
+use std::cmp::{
+    self,
+    Ordering::{Equal, Greater, Less},
+};
+
 use crate::{MaybePointer, ReversibleList};
 
 /// Immutable edition. **Ignores** any past calls to [`ReversibleList::reverse`], like
@@ -64,7 +69,7 @@ impl<'a, T: 'a> UndistortedCursor<'a, T> {
         }
     }
 
-    /// Returns the data stored on the current node, or `None` if the list is empty. There is no 
+    /// Returns the data stored on the current node, or `None` if the list is empty. There is no
     pub fn current(&self) -> Option<&T> {
         // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`.
         self.node.map(|node| unsafe { &(*node.as_ptr()).data })
@@ -122,6 +127,25 @@ impl<'a, T: 'a> UndistortedCursor<'a, T> {
         let n = n % self.list.len;
         for _ in 0..n {
             self.move_next();
+        }
+    }
+
+    /// Moves this cursor to the given absolute list index.
+    pub fn move_to(&mut self, target_idx: usize) {
+        // check if wrapping or going straight through the list is shorter
+        let direct_distance = self.index.abs_diff(target_idx);
+        let wrapping_distance = cmp::min(self.index, target_idx)
+            + cmp::max(self.index, target_idx).abs_diff(self.list.len);
+
+        match (
+            self.index.cmp(&target_idx),
+            direct_distance.cmp(&wrapping_distance),
+        ) {
+            (Less, Less | Equal) => self.move_next_n(direct_distance),
+            (Less, Greater) => self.move_prev_n(wrapping_distance),
+            (Greater, Less | Equal) => self.move_prev_n(direct_distance),
+            (Greater, Greater) => self.move_next_n(wrapping_distance),
+            (Equal, _) => (),
         }
     }
 }

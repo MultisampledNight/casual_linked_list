@@ -152,22 +152,22 @@ impl<T> ReversibleList<T> {
             (None, None) => {
                 self.start = None;
                 self.end = None;
-            },
+            }
             // 2. ele is at _one_ end of the list
             //    => readjustment of self.start/end necessary
             (Some(before_ele), None) => {
                 (*before_ele.as_ptr()).next = None;
                 self.end = Some(before_ele);
-            },
+            }
             (None, Some(after_ele)) => {
                 (*after_ele.as_ptr()).prev = None;
                 self.start = Some(after_ele);
-            },
+            }
             // 3. ele is somewhere _inside_ of the list
             (Some(before_ele), Some(after_ele)) => {
                 (*before_ele.as_ptr()).next = None;
                 (*after_ele.as_ptr()).prev = None;
-            },
+            }
         }
 
         self.len -= 1;

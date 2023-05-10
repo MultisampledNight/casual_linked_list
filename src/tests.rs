@@ -41,7 +41,10 @@ fn snake_and_reverse() {
 
     snake.push_front(1);
 
-    assert_eq!(snake.undistorted_iter().sum::<i32>(), snake.undistorted_iter().rev().sum());
+    assert_eq!(
+        snake.undistorted_iter().sum::<i32>(),
+        snake.undistorted_iter().rev().sum()
+    );
     assert_eq!(
         snake.undistorted_iter().copied().collect::<Vec<_>>(),
         vec![1, -45, 10, 1_000_000]
@@ -87,4 +90,14 @@ fn curious_cursors() {
     assert_eq!(player.current(), Some(&"a few doors producing music"));
     player.move_prev_n(4);
     assert_eq!(player.current(), Some(&"hyperbolic pillow"));
+
+    // ok so how about moving to a specific position
+    player.move_to(0);
+    assert_eq!(player.current(), Some(&"rainbow-striped button"));
+    player.move_to(4);
+    assert_eq!(player.current(), Some(&"hyperbolic pillow"));
+    player.move_to(2);
+    assert_eq!(player.current(), Some(&"the light switch"));
+    player.move_to(3);
+    assert_eq!(player.current(), Some(&"a few doors producing music"));
 }
