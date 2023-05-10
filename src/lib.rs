@@ -62,6 +62,13 @@ impl<T> ReversibleList<T> {
         unsafe { cursor::UndistortedCursor::new_back(self) }
     }
 
+    pub fn undistorted_cursor_at(&self, idx: usize) -> cursor::UndistortedCursor<'_, T> {
+        // SAFETY: Same as `Self::undistorted_iter`.
+        let mut cursor = unsafe { cursor::UndistortedCursor::new_back(self) };
+        cursor.move_to(idx);
+        cursor
+    }
+
     /// Appends the given item to the end of the list, should complete in _O_(1).
     pub fn push_front(&mut self, item: T) {
         // SAFETY: `self.start` is only mutated by `Self::insert_in_dir` or `Self::pop`,
