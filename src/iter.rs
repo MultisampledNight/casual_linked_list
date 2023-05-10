@@ -18,12 +18,15 @@
 //! 3. Return the data of the current node
 //! 4. Set the current node to the next node depending on the direction
 
-use crate::ElementPointer;
+use std::marker::PhantomData;
 
-pub struct Iter<'a, T> {
-    forward_node: ElementPointer<'a, T>,
-    backward_node: ElementPointer<'a, T>,
+use crate::MaybePointer;
+
+pub struct Iter<'list, T: 'list> {
+    forward_node: MaybePointer<T>,
+    backward_node: MaybePointer<T>,
     finished: bool,
+    _bound_to_list: PhantomData<&'list ()>,
 }
 
 enum Direction {
@@ -31,19 +34,20 @@ enum Direction {
     Backward,
 }
 
-impl<'a, T: 'a> Iter<'a, T> {
-    pub(crate) fn new(
-        forward_start: ElementPointer<'a, T>,
-        backward_start: ElementPointer<'a, T>,
+impl<'list, T: 'list> Iter<'list, T> {
+    pub(crate) unsafe fn new(
+        forward_start: MaybePointer<T>,
+        backward_start: MaybePointer<T>,
     ) -> Self {
         Self {
             forward_node: forward_start,
             backward_node: backward_start,
             finished: false,
+            _bound_to_list: PhantomData,
         }
     }
 
-    fn next_in_dir(&mut self, direction: Direction) -> Option<&'a T> {
+    fn next_in_dir(&mut self, direction: Direction) -> Option<&'list T> {
         if self.finished {
             return None;
         }
@@ -57,29 +61,29 @@ impl<'a, T: 'a> Iter<'a, T> {
 
         match direction {
             Direction::Forward => {
-                old_node = unsafe { self.forward_node.as_ref() };
-                self.forward_node = old_node.next()?;
+                old_node = unsafe { self.forward_node?.as_ref() };
+                self.forward_node = old_node.next;
             }
             Direction::Backward => {
-                old_node = unsafe { self.backward_node.as_ref() };
-                self.backward_node = old_node.prev()?;
+                old_node = unsafe { self.backward_node?.as_ref() };
+                self.backward_node = old_node.prev;
             }
         };
 
-        old_node.data()
+        Some(&old_node.data)
     }
 }
 
-impl<'a, T: 'a> Iterator for Iter<'a, T> {
-    type Item = &'a T;
+impl<'list, T: 'list> Iterator for Iter<'list, T> {
+    type Item = &'list T;
 
-    fn next(&mut self) -> Option<&'a T> {
+    fn next(&mut self) -> Option<&'list T> {
         self.next_in_dir(Direction::Forward)
     }
 }
 
-impl<'a, T: 'a> DoubleEndedIterator for Iter<'a, T> {
-    fn next_back(&mut self) -> Option<&'a T> {
+impl<'list, T: 'list> DoubleEndedIterator for Iter<'list, T> {
+    fn next_back(&mut self) -> Option<&'list T> {
         self.next_in_dir(Direction::Backward)
     }
 }

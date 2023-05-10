@@ -42,7 +42,10 @@ fn snake_and_reverse() {
     snake.push_front(1);
 
     assert_eq!(snake.iter().sum::<i32>(), snake.iter().rev().sum());
-    assert_eq!(snake.iter().copied().collect::<Vec<_>>(), vec![1, -45, 10, 1_000_000]);
+    assert_eq!(
+        snake.iter().copied().collect::<Vec<_>>(),
+        vec![1, -45, 10, 1_000_000]
+    );
 
     // trying to pop an already empty list should not panic
     for _ in 0..10 {

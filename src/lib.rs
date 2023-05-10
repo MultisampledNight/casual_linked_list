@@ -6,29 +6,22 @@ pub mod iter;
 
 use std::{fmt, mem, ptr::NonNull};
 
-type ElementPointer<'a, T> = NonNull<dyn Element<'a, T> + 'a>;
+type Pointer<T> = NonNull<Node<T>>;
+type MaybePointer<T> = Option<Pointer<T>>;
 
-pub struct ReversibleList<'a, T> {
-    start: NonNull<Head<'a, T>>,
-    end: NonNull<Tail<'a, T>>,
+pub struct ReversibleList<T> {
+    start: MaybePointer<T>,
+    end: MaybePointer<T>,
     len: usize,
 }
 
-impl<'a, T: 'a> ReversibleList<'a, T> {
+impl<T> ReversibleList<T> {
     pub fn new() -> Self {
-        // SAFETY: `Box::into_raw` from `allocate` guarantees non-nullness
-        let (start, end) = unsafe {
-            let start = allocate(Head {
-                next: NonNull::<Tail<T>>::dangling(),
-            });
-
-            let end = allocate(Tail { prev: start });
-
-            (*start.as_ptr()).next = end;
-            (start, end)
-        };
-
-        Self { start, end, len: 0 }
+        Self {
+            start: None,
+            end: None,
+            len: 0,
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -39,65 +32,64 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
         self.len == 0
     }
 
-    pub fn iter(&self) -> iter::Iter<'a, T> {
-        // SAFETY: 'a is the lifetime of the whole list,
+    pub fn iter<'a>(&'a self) -> iter::Iter<'a, T> {
+        // SAFETY: 'a is the lifetime of this list reference
         //         and `Iter` is bound by it --- will not ever be leaked
-        let start = unsafe { self.start.as_ref().next };
-        let end = unsafe { self.end.as_ref().prev };
-        iter::Iter::new(start, end)
+        unsafe { iter::Iter::new(self.start, self.end) }
     }
 
     /// Appends the given item to the end of the list, should complete in _O_(1).
     pub fn push_front(&mut self, item: T) {
-        // SAFETY: `self.start` is never invalidated and initialized only in `Self::new`
+        // SAFETY: `self.start` is only mutated by `Self::insert_in_dir` or `Self::pop`,
+        // which both preserve the validity of it.
         unsafe {
-            self.insert_in_dir(self.start, Direction::After, item);
+            self.insert_in_dir(self.start, Direction::Before, item);
         }
     }
 
     /// Inserts the given item before the first element of the list, should complete in _O_(1).
     pub fn push_back(&mut self, item: T) {
-        // SAFETY: `self.end` is never invalidated and initialized only in `Self::new`
+        // SAFETY: `self.end` is only mutated by `Self::insert_in_dir` or `Self::pop`,
+        // which both preserve the validity of it.
         unsafe {
-            self.insert_in_dir(self.end, Direction::Before, item);
+            self.insert_in_dir(self.end, Direction::After, item);
         }
     }
 
-    /// Inserts the given element in the given direction of the anchor element.
+    /// Inserts the given element in the given direction of the anchor element, or as the
+    /// sole element of this list, if `anchor` is `None`. Ensures that `self.start` and
+    /// `self.end` stay updated accordingly, if there is no node in `direction`.
     ///
     /// # Safety
     ///
-    /// `anchor` must be a valid, well-aligned pointer to a list element owned by this list.
+    /// If `anchor` is `Some`, it must be a valid, well-aligned pointer to a list element owned by this list, as well as the node in the given direction (if any).
     ///
     /// # Panics
     ///
     /// Panics if `anchor` is the sentinel tail or head element, and `direction` points
     /// away from the rest of the list.
-    unsafe fn insert_in_dir(
-        &mut self,
-        anchor: ElementPointer<'a, T>,
-        direction: Direction,
-        item: T,
-    ) {
-        let (Some(mut prev_for_new), Some(mut next_for_new)) =
-            retrieve_paired_elements(anchor, Pair::AnchorAnd(direction))
-        else {
-            panic!("tried to insert element in impossible relation to sentinel element");
+    unsafe fn insert_in_dir(&mut self, anchor: MaybePointer<T>, direction: Direction, item: T) {
+        let (before_new, after_new) = match anchor {
+            Some(anchor) => retrieve_paired_elements(anchor, Pair::AnchorAnd(direction)),
+            None => (None, None),
         };
 
-        let new_next = allocate(Node {
+        let new_node = allocate(Node {
             data: item,
-            prev: prev_for_new,
-            next: next_for_new,
+            prev: before_new,
+            next: after_new,
         });
 
-        // SAFETY: Node.next and Node.prev are only mutated by `Element::set_next` and
-        //         `Element::set_prev`, where the caller has to uphold the safety contract.
-        //         `new_next` was just created from `Box::into_raw` in `allocate`,
-        //         guaranteeing validity.
+        // SAFETY: Delegated to the caller.
         unsafe {
-            prev_for_new.as_mut().set_next(new_next);
-            next_for_new.as_mut().set_prev(new_next);
+            match before_new {
+                Some(before_new) => (*before_new.as_ptr()).next = Some(new_node),
+                None => self.start = Some(new_node),
+            }
+            match after_new {
+                Some(after_new) => (*after_new.as_ptr()).prev = Some(new_node),
+                None => self.end = Some(new_node),
+            }
         }
 
         self.len += 1;
@@ -106,14 +98,8 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
     /// Removes the element at the beginning of the list, should complete in _O_(1).
     pub fn pop_front(&mut self) -> Option<T> {
         // SAFETY: Same as `Self::push_front`,
-        //         additionally `Head.next` is only changed by `Element::set_next`,
-        //         where the caller has to uphold its unsafe contract.
-        if self.is_empty() {
-            return None;
-        }
-
         unsafe {
-            let first = self.start.as_ref().next;
+            let first = self.start?;
             Some(self.pop(first))
         }
     }
@@ -121,14 +107,8 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
     /// Removes the element at the end of the list, should complete in _O_(1).
     pub fn pop_back(&mut self) -> Option<T> {
         // SAFETY: Same as `Self::push_back`.
-        //         additionally `Tail.prev` is only changed by `Element::set_prev`,
-        //         where the caller has to uphold its unsafe contract.
-        if self.is_empty() {
-            return None;
-        }
-
         unsafe {
-            let last = self.end.as_ref().prev;
+            let last = self.end?;
             Some(self.pop(last))
         }
     }
@@ -138,22 +118,39 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
     /// # Safety
     ///
     /// `ele` must be a valid, well-aligned pointer to a list element owned by this list.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `ele` is the sentinel head or tail element.
-    unsafe fn pop(&mut self, ele: ElementPointer<'a, T>) -> T {
-        let (Some(mut before_ele), Some(mut after_ele)) = retrieve_paired_elements(ele, Pair::Surrounding)
-        else {
-            panic!("tried to pop sentinel head or tail");
-        };
+    unsafe fn pop(&mut self, ele: Pointer<T>) -> T {
+        let (before_ele, after_ele) = retrieve_paired_elements(ele, Pair::Surrounding);
 
-        before_ele.as_mut().set_next(after_ele);
-        after_ele.as_mut().set_prev(before_ele);
+        // unlink it from the previous elements
+        // there's 3 cases:
+        match (before_ele, after_ele) {
+            // 1. ele is at _both_ ends of the list (the only element)
+            (None, None) => {
+                self.start = None;
+                self.end = None;
+            },
+            // 2. ele is at _one_ end of the list
+            //    => readjustment of self.start/end necessary
+            (Some(before_ele), None) => {
+                (*before_ele.as_ptr()).next = None;
+                self.end = Some(before_ele);
+            },
+            (None, Some(after_ele)) => {
+                (*after_ele.as_ptr()).prev = None;
+                self.start = Some(after_ele);
+            },
+            // 3. ele is somewhere _inside_ of the list
+            (Some(before_ele), Some(after_ele)) => {
+                (*before_ele.as_ptr()).next = None;
+                (*after_ele.as_ptr()).prev = None;
+            },
+        }
 
         self.len -= 1;
+
+        // reboxed will be dropped at the end of the scope -- and deallocate the Node
         let reboxed = Box::from_raw(ele.as_ptr());
-        reboxed.into_data().unwrap()
+        reboxed.data
     }
 }
 
@@ -174,22 +171,22 @@ enum Pair {
 /// # Safety
 ///
 /// `anchor` must be a valid, well-aligned pointer to a list element.
-unsafe fn retrieve_paired_elements<'a, T: 'a>(
-    anchor: ElementPointer<'a, T>,
+unsafe fn retrieve_paired_elements<T>(
+    anchor: Pointer<T>,
     which: Pair,
-) -> (Option<ElementPointer<'a, T>>, Option<ElementPointer<'a, T>>) {
+) -> (MaybePointer<T>, MaybePointer<T>) {
     match which {
         Pair::AnchorAnd(Direction::Before) => {
-            let ele_before_anchor = anchor.as_ref().prev();
+            let ele_before_anchor = anchor.as_ref().prev;
             (ele_before_anchor, Some(anchor))
         }
         Pair::AnchorAnd(Direction::After) => {
-            let ele_after_anchor = anchor.as_ref().next();
+            let ele_after_anchor = anchor.as_ref().next;
             (Some(anchor), ele_after_anchor)
         }
         Pair::Surrounding => {
-            let ele_before_anchor = anchor.as_ref().prev();
-            let ele_after_anchor = anchor.as_ref().next();
+            let ele_before_anchor = anchor.as_ref().prev;
+            let ele_after_anchor = anchor.as_ref().next;
             (ele_before_anchor, ele_after_anchor)
         }
     }
@@ -201,27 +198,31 @@ fn allocate<T>(item: T) -> NonNull<T> {
     unsafe { NonNull::new_unchecked(ptr) }
 }
 
-impl<'a, T: fmt::Debug + 'a> fmt::Debug for ReversibleList<'a, T> {
+impl<T: fmt::Debug> fmt::Debug for ReversibleList<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.iter()).finish()
     }
 }
 
-impl<'a, T: 'a> Default for ReversibleList<'a, T> {
+impl<T> Default for ReversibleList<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'a, T: 'a> Drop for ReversibleList<'a, T> {
+impl<T> Drop for ReversibleList<T> {
     fn drop(&mut self) {
         // SAFETY: boxes are only allocated in either `Self::insert_in_dir` or in `Self::new`,
         //         but either are never exposed
         //         nodes from `Self::push_*` _are_ deallocated with `Self::pop`,
         //         but are also unlinked and made inaccessible
-        let mut element = self.start.as_ptr() as *mut dyn Element<'a, T>;
+        let Some(start) = self.start else {
+            return;
+        };
+
+        let mut element = start.as_ptr();
         unsafe {
-            while let Some(next) = (*element).next() {
+            while let Some(next) = (*element).next {
                 let old = mem::replace(&mut element, next.as_ptr());
                 drop(Box::from_raw(old));
             }
@@ -230,146 +231,8 @@ impl<'a, T: 'a> Drop for ReversibleList<'a, T> {
     }
 }
 
-/// Rust is not suited at all for the composite pattern in such a low-level collection. But for fun
-/// and profit I'll use it here anyway.
-trait Element<'a, T: 'a> {
-    fn data(&self) -> Option<&T>;
-    fn data_mut(&mut self) -> Option<&mut T>;
-    fn into_data(self: Box<Self>) -> Option<T>;
-    fn prev(&self) -> Option<ElementPointer<'a, T>>;
-    fn next(&self) -> Option<ElementPointer<'a, T>>;
-
-    fn is_sentinel(&self) -> bool;
-
-    /// Sets the pointer to the previous element to the given pointer.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure that `ptr` is a pointer to a valid node, and that the
-    /// previous node is appropiately dropped if not used otherwise.
-    unsafe fn set_prev(&mut self, ptr: ElementPointer<'a, T>);
-
-    /// Sets the pointer to the next element to the given pointer.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure that `ptr` is a pointer to a valid node, and that the
-    /// previous node is appropiately dropped if not used otherwise.
-    unsafe fn set_next(&mut self, ptr: ElementPointer<'a, T>);
-}
-
-struct Head<'a, T> {
-    next: ElementPointer<'a, T>,
-}
-
-impl<'a, T: 'a> Element<'a, T> for Head<'a, T> {
-    fn data(&self) -> Option<&T> {
-        None
-    }
-
-    fn data_mut(&mut self) -> Option<&mut T> {
-        None
-    }
-
-    fn into_data(self: Box<Self>) -> Option<T> {
-        None
-    }
-
-    fn prev(&self) -> Option<ElementPointer<'a, T>> {
-        None
-    }
-
-    fn next(&self) -> Option<ElementPointer<'a, T>> {
-        Some(self.next)
-    }
-
-    unsafe fn set_prev(&mut self, ptr: ElementPointer<'a, T>) {
-        panic!("head does not have any previous element, but tried to set {ptr:?}");
-    }
-
-    unsafe fn set_next(&mut self, ptr: ElementPointer<'a, T>) {
-        self.next = ptr;
-    }
-
-    fn is_sentinel(&self) -> bool {
-        true
-    }
-}
-
-struct Tail<'a, T> {
-    prev: ElementPointer<'a, T>,
-}
-
-impl<'a, T: 'a> Element<'a, T> for Tail<'a, T> {
-    fn data(&self) -> Option<&T> {
-        None
-    }
-
-    fn data_mut(&mut self) -> Option<&mut T> {
-        None
-    }
-
-    fn into_data(self: Box<Self>) -> Option<T> {
-        None
-    }
-
-    fn prev(&self) -> Option<ElementPointer<'a, T>> {
-        Some(self.prev)
-    }
-
-    fn next(&self) -> Option<ElementPointer<'a, T>> {
-        None
-    }
-
-    unsafe fn set_prev(&mut self, ptr: ElementPointer<'a, T>) {
-        self.prev = ptr;
-    }
-
-    unsafe fn set_next(&mut self, ptr: ElementPointer<'a, T>) {
-        panic!("tail does not have any next element, but tried to set {ptr:?}");
-    }
-
-    fn is_sentinel(&self) -> bool {
-        true
-    }
-}
-
-struct Node<'a, T> {
+struct Node<T> {
     data: T,
-    prev: ElementPointer<'a, T>,
-    next: ElementPointer<'a, T>,
-}
-
-impl<'a, T: 'a> Element<'a, T> for Node<'a, T> {
-    fn data(&self) -> Option<&T> {
-        Some(&self.data)
-    }
-
-    fn data_mut(&mut self) -> Option<&mut T> {
-        Some(&mut self.data)
-    }
-
-    fn into_data(self: Box<Self>) -> Option<T> {
-        Some(self.data)
-    }
-
-    fn prev(&self) -> Option<ElementPointer<'a, T>> {
-        Some(self.prev)
-    }
-
-    fn next(&self) -> Option<ElementPointer<'a, T>> {
-        Some(self.next)
-    }
-
-    unsafe fn set_prev(&mut self, ptr: ElementPointer<'a, T>) {
-        self.prev = ptr;
-    }
-
-    unsafe fn set_next(&mut self, ptr: ElementPointer<'a, T>) {
-        self.next = ptr;
-    }
-
-    fn is_sentinel(&self) -> bool {
-        false
-    }
+    prev: MaybePointer<T>,
+    next: MaybePointer<T>,
 }

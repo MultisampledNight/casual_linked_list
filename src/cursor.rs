@@ -27,10 +27,13 @@
 //! [`index`]: Cursor::index
 //! [`None`]: Option::None
 
-use crate::ElementPointer;
+use std::marker::PhantomData;
+
+use crate::MaybePointer;
 
 /// Immutable edition.
 pub struct Cursor<'a, T> {
-    _ele: ElementPointer<'a, T>,
+    _ele: MaybePointer<T>,
     _index: usize,
+    _bound_to_list: PhantomData<&'a ()>,
 }
