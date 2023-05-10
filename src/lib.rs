@@ -48,19 +48,17 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
 
     /// Appends the given item to the end of the list, should complete in _O_(_1_).
     pub fn push_front(&mut self, item: T) {
-        // SAFETY: `self.start` is never invalidated and initialized only in `Self::new`,
-        // `head.next` is only set by `Element::set_next`, where its unsafe contract must be upheld
+        // SAFETY: `self.start` is never invalidated and initialized only in `Self::new`
         unsafe {
-            self.insert_in_dir(self.start.as_ref().next, Direction::Before, item);
+            self.insert_in_dir(self.start, Direction::After, item);
         }
     }
 
     /// Inserts the given item before the first element of the list, should complete in _O_(_1_).
     pub fn push_back(&mut self, item: T) {
-        // SAFETY: `self.end` is never invalidated and initialized only in `Self::new`,
-        // `tail.prev` is only set by `Element::set_prev`, where its unsafe contract must be upheld
+        // SAFETY: `self.end` is never invalidated and initialized only in `Self::new`
         unsafe {
-            self.insert_in_dir(self.end.as_ref().prev, Direction::After, item);
+            self.insert_in_dir(self.end, Direction::Before, item);
         }
     }
 
@@ -106,7 +104,9 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
 
     /// Removes the element at the beginning of the list, should complete in _O_(_1_).
     pub fn pop_front(&mut self) -> Option<T> {
-        // SAFETY: Exact same as `Self::push_front`.
+        // SAFETY: Same as `Self::push_front`,
+        //         additionally `Head.next` is only changed by `Element::set_next`,
+        //         where the caller has to uphold its unsafe contract.
         if self.is_empty() {
             return None;
         }
@@ -119,7 +119,9 @@ impl<'a, T: 'a> ReversibleList<'a, T> {
 
     /// Removes the element at the end of the list, should complete in _O_(_1_).
     pub fn pop_back(&mut self) -> Option<T> {
-        // SAFETY: Exact same as `Self::push_back`.
+        // SAFETY: Same as `Self::push_back`.
+        //         additionally `Tail.prev` is only changed by `Element::set_prev`,
+        //         where the caller has to uphold its unsafe contract.
         if self.is_empty() {
             return None;
         }
