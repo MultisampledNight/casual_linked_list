@@ -4,7 +4,7 @@ mod tests;
 pub mod cursor;
 pub mod iter;
 
-use std::{fmt, mem, ptr::NonNull};
+use std::{fmt, ptr::NonNull};
 
 type Pointer<T> = NonNull<Node<T>>;
 type MaybePointer<T> = Option<Pointer<T>>;
@@ -251,21 +251,9 @@ impl<T> Default for ReversibleList<T> {
 
 impl<T> Drop for ReversibleList<T> {
     fn drop(&mut self) {
-        // SAFETY: boxes are only allocated in either `Self::insert_in_dir` or in `Self::new`,
-        //         but either are never exposed
-        //         nodes from `Self::push_*` _are_ deallocated with `Self::pop`,
-        //         but are also unlinked and made inaccessible
-        let Some(start) = self.start else {
-            return;
-        };
-
-        let mut element = start.as_ptr();
-        unsafe {
-            while let Some(next) = (*element).next {
-                let old = mem::replace(&mut element, next.as_ptr());
-                drop(Box::from_raw(old));
-            }
-            drop(Box::from_raw(element));
-        }
+        // just create a cursor and remove elements until it is empty
+        // the cursor advances to the next element automatically
+        let mut cursor = self.undistorted_cursor_front_mut();
+        while cursor.remove_current().is_some() {}
     }
 }
