@@ -190,13 +190,33 @@ impl<'a, T: 'a> UndistortedCursorMut<'a, T> {
         unsafe {
             self.list.insert_in_dir(self.node, Direction::Before, item);
         }
+        self.index += 1;
     }
 
     /// Removes the current node and returns the data that was stored on it. Returns `None`
     /// if the list is empty.
+    ///
+    /// If the list only contains one node, the cursor will point into the dark
+    /// afterwards, the
     pub fn remove_current(&mut self) -> Option<T> {
-        let node = self.node?;
-        // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`.
+        // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`, the
+        // pointer is updated appropiately afterwards.
+        let node = dbg!(self.node?);
+
+        let node_ref = unsafe { node.as_ref() };
+        self.node = match dbg!(node_ref.prev, node_ref.next) {
+            // start/mid of the list; index stays the same
+            (_, Some(next)) => Some(next),
+            // end of the list; index needs to move one node backward
+            (Some(prev), None) => {
+                self.index -= 1;
+                Some(prev)
+            }
+            // list only contains only one element; index must be already 0
+            (None, None) => None,
+        };
+        dbg!(self.node);
+
         Some(unsafe { self.list.remove(node) })
     }
 }

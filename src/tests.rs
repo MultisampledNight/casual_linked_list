@@ -102,4 +102,21 @@ fn curious_cursors() {
     assert_eq!(player.current(), Some(&"a few doors producing music"));
     player.move_to(3);
     assert_eq!(player.current(), Some(&"a few doors producing music"));
+
+    // now that we've looked around enough, let's modify
+    let mut player = list.undistorted_cursor_front_mut();
+    player.move_to(3);
+    assert_eq!(player.remove_current(), Some("a few doors producing music")); // no more doors :(
+    assert_eq!(player.remove_current(), Some("hyperbolic pillow"));
+    player.insert_after("portable table");
+    assert_eq!(player.remove_current(), Some("the light switch"));
+    assert_eq!(player.remove_current(), Some("portable table"));
+
+    player.insert_before("cookies");
+    player.move_prev();
+    assert_eq!(player.remove_current(), Some("cookies"));
+
+    player.remove_current().unwrap();
+    player.remove_current().unwrap();
+    assert_eq!(player.remove_current(), None);
 }

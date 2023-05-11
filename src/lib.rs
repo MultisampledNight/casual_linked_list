@@ -178,8 +178,8 @@ impl<T> ReversibleList<T> {
             }
             // 3. ele is somewhere _inside_ of the list
             (Some(before_ele), Some(after_ele)) => {
-                (*before_ele.as_ptr()).next = None;
-                (*after_ele.as_ptr()).prev = None;
+                (*before_ele.as_ptr()).next = Some(after_ele);
+                (*after_ele.as_ptr()).prev = Some(before_ele);
             }
         }
 
