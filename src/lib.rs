@@ -62,6 +62,16 @@ impl<T> ReversibleList<T> {
         unsafe { cursor::UndistortedCursor::new_back(self) }
     }
 
+    pub fn undistorted_cursor_front_mut(&mut self) -> cursor::UndistortedCursorMut<'_, T> {
+        // SAFETY: Same as `Self::undistorted_iter`.
+        unsafe { cursor::UndistortedCursorMut::new_front(self) }
+    }
+
+    pub fn undistorted_cursor_back_mut(&mut self) -> cursor::UndistortedCursorMut<'_, T> {
+        // SAFETY: Same as `Self::undistorted_iter`.
+        unsafe { cursor::UndistortedCursorMut::new_back(self) }
+    }
+
     pub fn undistorted_cursor_at(&self, idx: usize) -> cursor::UndistortedCursor<'_, T> {
         // SAFETY: Same as `Self::undistorted_iter`.
         let mut cursor = unsafe { cursor::UndistortedCursor::new_back(self) };

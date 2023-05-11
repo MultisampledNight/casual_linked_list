@@ -46,106 +46,122 @@ pub struct UndistortedCursor<'a, T> {
     list: &'a ReversibleList<T>,
 }
 
-impl<'a, T: 'a> UndistortedCursor<'a, T> {
-    /// # Safety
-    ///
-    /// `list.start` must be a valid pointer to the first list element.
-    pub(crate) unsafe fn new_front(list: &'a ReversibleList<T>) -> Self {
-        Self {
-            node: list.start,
-            index: 0,
-            list,
+macro_rules! impl_common_cursor {
+    ($name:ident $($mut:ident)?) => {
+        impl<'a, T: 'a> $name<'a, T> {
+            /// # Safety
+            ///
+            /// `list.start` must be a valid pointer to the first list element.
+            pub(crate) unsafe fn new_front(list: &'a $($mut)? ReversibleList<T>) -> Self {
+                Self {
+                    node: list.start,
+                    index: 0,
+                    list,
+                }
+            }
+
+            /// # Safety
+            ///
+            /// `list.end` must be a valid pointer to the last list element.
+            pub(crate) unsafe fn new_back(list: &'a $($mut)? ReversibleList<T>) -> Self {
+                Self {
+                    node: list.end,
+                    index: list.len.saturating_sub(1),
+                    list,
+                }
+            }
+
+            /// Returns the data stored on the current node, or `None` if the list is empty. There is no
+            pub fn current(&self) -> Option<&T> {
+                // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`.
+                self.node.map(|node| unsafe { &(*node.as_ptr()).data })
+            }
+
+            /// Makes this cursor look at the **previous** node in the list. If there is none, the cursor will
+            /// point at the **end** of the list. Does nothing if the list is empty.
+            pub fn move_prev(&mut self) {
+                let Some(current) = self.node else {
+                    return;
+                };
+
+                if self.index == 0 {
+                    // currently at the start, wrap to the end
+                    self.node = self.list.end;
+                    self.index = self.list.len.saturating_sub(1);
+                } else {
+                    // somewhere in mid of the list
+                    // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`.
+                    self.node = unsafe { (*current.as_ptr()).prev };
+                    self.index -= 1;
+                }
+            }
+
+            /// Makes this cursor look at the **next** node in the list. If there is none, the cursor will
+            /// point at the **beginning** of the list. Does nothing if the list is empty.
+            pub fn move_next(&mut self) {
+                let Some(current) = self.node else {
+                    return;
+                };
+
+                if self.index == self.list.len.saturating_sub(1) {
+                    // currently at the end, wrap to the start
+                    self.node = self.list.start;
+                    self.index = 0;
+                } else {
+                    // somewhere in mid of the list
+                    // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`.
+                    self.node = unsafe { (*current.as_ptr()).next };
+                    self.index += 1;
+                }
+            }
+
+            /// Moves this cursor `n` nodes backward. Note that wrapping behavior still applies.
+            pub fn move_prev_n(&mut self, n: usize) {
+                // filter out how many times we we really need to move
+                let n = n % self.list.len;
+                for _ in 0..n {
+                    self.move_prev();
+                }
+            }
+
+            /// Moves this cursor `n` nodes forward. Note that wrapping behavior still applies.
+            pub fn move_next_n(&mut self, n: usize) {
+                let n = n % self.list.len;
+                for _ in 0..n {
+                    self.move_next();
+                }
+            }
+
+            /// Moves this cursor to the given absolute list index.
+            pub fn move_to(&mut self, target_idx: usize) {
+                // check if wrapping or going straight through the list is shorter
+                let direct_distance = self.index.abs_diff(target_idx);
+                let wrapping_distance = cmp::min(self.index, target_idx)
+                    + cmp::max(self.index, target_idx).abs_diff(self.list.len);
+
+                match (
+                    self.index.cmp(&target_idx),
+                    direct_distance.cmp(&wrapping_distance),
+                ) {
+                    (Less, Less | Equal) => self.move_next_n(direct_distance),
+                    (Less, Greater) => self.move_prev_n(wrapping_distance),
+                    (Greater, Less | Equal) => self.move_prev_n(direct_distance),
+                    (Greater, Greater) => self.move_next_n(wrapping_distance),
+                    (Equal, _) => (),
+                }
+            }
         }
-    }
-
-    /// # Safety
-    ///
-    /// `list.end` must be a valid pointer to the last list element.
-    pub(crate) unsafe fn new_back(list: &'a ReversibleList<T>) -> Self {
-        Self {
-            node: list.end,
-            index: list.len.saturating_sub(1),
-            list,
-        }
-    }
-
-    /// Returns the data stored on the current node, or `None` if the list is empty. There is no
-    pub fn current(&self) -> Option<&T> {
-        // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`.
-        self.node.map(|node| unsafe { &(*node.as_ptr()).data })
-    }
-
-    /// Makes this cursor look at the **previous** node in the list. If there is none, the cursor will
-    /// point at the **end** of the list. Does nothing if the list is empty.
-    pub fn move_prev(&mut self) {
-        let Some(current) = self.node else {
-            return;
-        };
-
-        if self.index == 0 {
-            // currently at the start, wrap to the end
-            self.node = self.list.end;
-            self.index = self.list.len.saturating_sub(1);
-        } else {
-            // somewhere in mid of the list
-            // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`.
-            self.node = unsafe { (*current.as_ptr()).prev };
-            self.index -= 1;
-        }
-    }
-
-    /// Makes this cursor look at the **next** node in the list. If there is none, the cursor will
-    /// point at the **beginning** of the list. Does nothing if the list is empty.
-    pub fn move_next(&mut self) {
-        let Some(current) = self.node else {
-            return;
-        };
-
-        if self.index == self.list.len.saturating_sub(1) {
-            // currently at the end, wrap to the start
-            self.node = self.list.start;
-            self.index = 0;
-        } else {
-            // somewhere in mid of the list
-            // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`.
-            self.node = unsafe { (*current.as_ptr()).next };
-            self.index += 1;
-        }
-    }
-
-    /// Moves this cursor `n` nodes backward. Note that wrapping behavior still applies.
-    pub fn move_prev_n(&mut self, n: usize) {
-        // filter out how many times we we really need to move
-        let n = n % self.list.len;
-        for _ in 0..n {
-            self.move_prev();
-        }
-    }
-
-    /// Moves this cursor `n` nodes forward. Note that wrapping behavior still applies.
-    pub fn move_next_n(&mut self, n: usize) {
-        let n = n % self.list.len;
-        for _ in 0..n {
-            self.move_next();
-        }
-    }
-
-    /// Moves this cursor to the given absolute list index.
-    pub fn move_to(&mut self, target_idx: usize) {
-        // check if wrapping or going straight through the list is shorter
-        let direct_distance = self.index.abs_diff(target_idx);
-        let wrapping_distance = cmp::min(self.index, target_idx)
-            + cmp::max(self.index, target_idx).abs_diff(self.list.len);
-
-        match (
-            self.index.cmp(&target_idx),
-            direct_distance.cmp(&wrapping_distance),
-        ) {
-            (Less, Less | Equal) => self.move_next_n(direct_distance),
-            (Less, Greater) => self.move_prev_n(wrapping_distance),
-            (Greater, Less | Equal) => self.move_prev_n(direct_distance),
-            (Greater, Greater) => self.move_next_n(wrapping_distance),
-            (Equal, _) => (),
-        }
-    }
+    };
 }
+
+impl_common_cursor!(UndistortedCursor);
+
+/// Mutable edition. **Ignores** any past calls to [`ReversibleList::reverse`], like
+/// [`ReversibleList::undistorted_iter`], see its documentation for details.
+pub struct UndistortedCursorMut<'a, T> {
+    node: MaybePointer<T>,
+    index: usize,
+    list: &'a mut ReversibleList<T>,
+}
+
+impl_common_cursor!(UndistortedCursorMut mut);
