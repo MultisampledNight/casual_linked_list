@@ -41,7 +41,14 @@ impl<T> ReversibleList<T> {
         self.len == 0
     }
 
-    /// Iterates through this list while **ignoring** any past calls to
+    /// Returns an iterator through this list.
+    pub fn iter(&self) -> iter::UndistortedIter<'_, T> {
+        // TODO: this is currently just an alias since I don't want to update all those consumer
+        //       methods afterwards; change this once jumps are implemented
+        self.undistorted_iter()
+    }
+
+    /// Returns an iterator through this list while **ignoring** any past calls to
     /// [`Self::reverse`], which might lead to unexpected element positions. This
     /// representation is also **not** preserved when cloning the list.
     #[must_use]
@@ -244,9 +251,14 @@ fn allocate<T>(item: T) -> NonNull<T> {
 
 impl<T: Clone> Clone for ReversibleList<T> {
     fn clone(&self) -> Self {
-        // TODO: use the distorted iter once jumps are implemented
+        // TODO: think about if a clone implying a normalize is really okay, maybe normalize should
+        //       be its own function instead, and `Clone` really a per-value clone
+        //       then there could be another function that clones *and* normalizes
+        //       (what's done here at the moment)
         self.undistorted_iter().map(Clone::clone).collect()
     }
+
+    // TODO: optimized clone_from
 }
 
 impl<T: fmt::Debug> fmt::Debug for ReversibleList<T> {
@@ -293,8 +305,7 @@ impl<T> FromIterator<T> for ReversibleList<T> {
 
 impl<T: PartialEq> PartialEq for ReversibleList<T> {
     fn eq(&self, other: &Self) -> bool {
-        // TODO: should be distorted once jumps are implemented
-        self.undistorted_iter().eq(other.undistorted_iter())
+        self.iter().eq(other.undistorted_iter())
     }
 }
 
@@ -302,15 +313,12 @@ impl<T: Eq> Eq for ReversibleList<T> {}
 
 impl<T: PartialOrd> PartialOrd for ReversibleList<T> {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        // TODO: should be distorted once jumps are implemented
-        self.undistorted_iter()
-            .partial_cmp(other.undistorted_iter())
+        self.iter().partial_cmp(other.undistorted_iter())
     }
 }
 
 impl<T: Ord> Ord for ReversibleList<T> {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        // TODO: should be distorted once jumps are implemented
-        self.undistorted_iter().cmp(other.undistorted_iter())
+        self.iter().cmp(other.undistorted_iter())
     }
 }
