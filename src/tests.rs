@@ -122,3 +122,22 @@ fn curious_cursors() {
     assert_eq!(player.remove_current(), None);
     assert_eq!(player.index(), None);
 }
+
+#[test]
+fn standard_traits() {
+    let mut manually_pushed = ReversibleList::new();
+    manually_pushed.push_front("a");
+    manually_pushed.push_back("sentence");
+    manually_pushed.push_front("is");
+    manually_pushed.push_front("this");
+
+    let collected = ["this", "is", "a", "sentence"].into_iter().collect();
+    assert_eq!(manually_pushed, collected);
+
+    let cloned = collected.clone();
+    assert_eq!(collected, cloned);
+
+    let mut composited: ReversibleList<_> = ["this"].into_iter().collect();
+    composited.extend(["is", "a", "sentence"]);
+    assert_eq!(cloned, composited);
+}

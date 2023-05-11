@@ -4,7 +4,7 @@ mod tests;
 pub mod cursor;
 pub mod iter;
 
-use std::{fmt, ptr::NonNull};
+use std::{cmp, fmt, ptr::NonNull};
 
 type Pointer<T> = NonNull<Node<T>>;
 type MaybePointer<T> = Option<Pointer<T>>;
@@ -42,7 +42,8 @@ impl<T> ReversibleList<T> {
     }
 
     /// Iterates through this list while **ignoring** any past calls to
-    /// [`Self::reverse`], which might lead to unexpected element positions.
+    /// [`Self::reverse`], which might lead to unexpected element positions. This
+    /// representation is also **not** preserved when cloning the list.
     #[must_use]
     pub fn undistorted_iter(&self) -> iter::UndistortedIter<'_, T> {
         // SAFETY: '_ is the lifetime of this list reference
@@ -52,11 +53,15 @@ impl<T> ReversibleList<T> {
         unsafe { iter::UndistortedIter::new(self.start, self.end) }
     }
 
+    /// Creates a cursor pointing at the **first** node in the list. Note that this
+    /// representation **ignores** any previous calls to [`Self::reverse`]
     pub fn undistorted_cursor_front(&self) -> cursor::UndistortedCursor<'_, T> {
         // SAFETY: Same as `Self::undistorted_iter`.
         unsafe { cursor::UndistortedCursor::new_front(self) }
     }
 
+    /// Creates a cursor pointing at the **last** node in the list. Note that this
+    /// representation **ignores** any previous calls to [`Self::reverse`]
     pub fn undistorted_cursor_back(&self) -> cursor::UndistortedCursor<'_, T> {
         // SAFETY: Same as `Self::undistorted_iter`.
         unsafe { cursor::UndistortedCursor::new_back(self) }
@@ -237,6 +242,13 @@ fn allocate<T>(item: T) -> NonNull<T> {
     unsafe { NonNull::new_unchecked(ptr) }
 }
 
+impl<T: Clone> Clone for ReversibleList<T> {
+    fn clone(&self) -> Self {
+        // TODO: use the distorted iter once jumps are implemented
+        self.undistorted_iter().map(Clone::clone).collect()
+    }
+}
+
 impl<T: fmt::Debug> fmt::Debug for ReversibleList<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.undistorted_iter()).finish()
@@ -255,5 +267,50 @@ impl<T> Drop for ReversibleList<T> {
         // the cursor advances to the next element automatically
         let mut cursor = self.undistorted_cursor_front_mut();
         while cursor.remove_current().is_some() {}
+    }
+}
+
+impl<T> Extend<T> for ReversibleList<T> {
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        // distortions caused by Self::reverse are only applicable on a finite range
+        // so extending a ReversibleList *always* ends up at the absolute end, either way
+        let mut back_cursor = self.undistorted_cursor_back_mut();
+
+        for item in iter {
+            back_cursor.insert_after(item);
+            back_cursor.move_next();
+        }
+    }
+}
+
+impl<T> FromIterator<T> for ReversibleList<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let mut list = Self::new();
+        list.extend(iter);
+        list
+    }
+}
+
+impl<T: PartialEq> PartialEq for ReversibleList<T> {
+    fn eq(&self, other: &Self) -> bool {
+        // TODO: should be distorted once jumps are implemented
+        self.undistorted_iter().eq(other.undistorted_iter())
+    }
+}
+
+impl<T: Eq> Eq for ReversibleList<T> {}
+
+impl<T: PartialOrd> PartialOrd for ReversibleList<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        // TODO: should be distorted once jumps are implemented
+        self.undistorted_iter()
+            .partial_cmp(other.undistorted_iter())
+    }
+}
+
+impl<T: Ord> Ord for ReversibleList<T> {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        // TODO: should be distorted once jumps are implemented
+        self.undistorted_iter().cmp(other.undistorted_iter())
     }
 }

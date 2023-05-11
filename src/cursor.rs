@@ -187,6 +187,11 @@ impl<'a, T: 'a> UndistortedCursorMut<'a, T> {
         unsafe {
             self.list.insert_in_dir(self.node, Direction::After, item);
         }
+
+        if self.list.len == 1 {
+            // list was previously empty, so the cursor now needs to point at the new element
+            self.node = self.list.start;
+        }
     }
 
     /// Inserts the given item **before** the current node, creating a new node between the
@@ -196,7 +201,13 @@ impl<'a, T: 'a> UndistortedCursorMut<'a, T> {
         unsafe {
             self.list.insert_in_dir(self.node, Direction::Before, item);
         }
-        self.index += 1;
+
+        if self.list.len == 1 {
+            // list was previously empty, so the cursor now needs to point at the new element
+            self.node = self.list.start;
+        } else {
+            self.index += 1;
+        }
     }
 
     /// Removes the current node and returns the data that was stored on it. Returns `None`
