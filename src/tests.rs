@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::ReversibleList;
 
 #[test]
@@ -137,7 +139,18 @@ fn standard_traits() {
     let cloned = collected.clone();
     assert_eq!(collected, cloned);
 
-    let mut composited: ReversibleList<_> = ["this"].into_iter().collect();
+    let mut composited = ReversibleList::from(["this"]);
     composited.extend(["is", "a", "sentence"]);
     assert_eq!(cloned, composited);
+    
+    let from_vec = ReversibleList::from(vec!["this", "is", "a", "sentence"]);
+    assert_eq!(composited, from_vec);
+
+    let mut set = HashSet::new();
+    set.insert(manually_pushed);
+    set.insert(collected);
+    set.insert(cloned);
+    set.insert(composited);
+    set.insert(from_vec);
+    assert_eq!(set.len(), 1);
 }

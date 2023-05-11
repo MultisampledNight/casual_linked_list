@@ -4,7 +4,7 @@ mod tests;
 pub mod cursor;
 pub mod iter;
 
-use std::{cmp, fmt, ptr::NonNull};
+use std::{cmp, fmt, ptr::NonNull, hash::{Hash, Hasher}};
 
 type Pointer<T> = NonNull<Node<T>>;
 type MaybePointer<T> = Option<Pointer<T>>;
@@ -255,7 +255,7 @@ impl<T: Clone> Clone for ReversibleList<T> {
         //       be its own function instead, and `Clone` really a per-value clone
         //       then there could be another function that clones *and* normalizes
         //       (what's done here at the moment)
-        self.undistorted_iter().map(Clone::clone).collect()
+        self.iter().map(Clone::clone).collect()
     }
 
     // TODO: optimized clone_from
@@ -300,6 +300,27 @@ impl<T> FromIterator<T> for ReversibleList<T> {
         let mut list = Self::new();
         list.extend(iter);
         list
+    }
+}
+
+impl<T> From<Vec<T>> for ReversibleList<T> {
+    fn from(value: Vec<T>) -> Self {
+        value.into_iter().collect()
+    }
+}
+
+impl<T, const N: usize> From<[T; N]> for ReversibleList<T> {
+    fn from(value: [T; N]) -> Self {
+        value.into_iter().collect()
+    }
+}
+
+impl<T: Hash> Hash for ReversibleList<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.len.hash(state);
+        for item in self.iter() {
+            item.hash(state);
+        }
     }
 }
 
