@@ -36,7 +36,7 @@ use std::cmp::{
     Ordering::{Equal, Greater, Less},
 };
 
-use crate::{MaybePointer, ReversibleList};
+use crate::{Direction, MaybePointer, ReversibleList};
 
 /// Immutable edition. **Ignores** any past calls to [`ReversibleList::reverse`], like
 /// [`ReversibleList::undistorted_iter`], see its documentation for details.
@@ -71,7 +71,7 @@ macro_rules! impl_common_cursor {
                 }
             }
 
-            /// Returns the data stored on the current node, or `None` if the list is empty. There is no
+            /// Returns the data stored on the current node, or `None` if the list is empty.
             pub fn current(&self) -> Option<&T> {
                 // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`.
                 self.node.map(|node| unsafe { &(*node.as_ptr()).data })
@@ -165,3 +165,38 @@ pub struct UndistortedCursorMut<'a, T> {
 }
 
 impl_common_cursor!(UndistortedCursorMut mut);
+
+impl<'a, T: 'a> UndistortedCursorMut<'a, T> {
+    /// Returns a mutable reference to the data stored on the current node, or `None` if the
+    /// list is empty.
+    pub fn current_mut(&mut self) -> Option<&mut T> {
+        // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`.
+        self.node.map(|node| unsafe { &mut (*node.as_ptr()).data })
+    }
+
+    /// Inserts the given item **after** the current node, creating a new node between the
+    /// current one and the currently next one.
+    pub fn insert_after(&mut self, item: T) {
+        // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`.
+        unsafe {
+            self.list.insert_in_dir(self.node, Direction::After, item);
+        }
+    }
+
+    /// Inserts the given item **before** the current node, creating a new node between the
+    /// current one and the currently previous one.
+    pub fn insert_before(&mut self, item: T) {
+        // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`.
+        unsafe {
+            self.list.insert_in_dir(self.node, Direction::Before, item);
+        }
+    }
+
+    /// Removes the current node and returns the data that was stored on it. Returns `None`
+    /// if the list is empty.
+    pub fn remove_current(&mut self) -> Option<T> {
+        let node = self.node?;
+        // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`.
+        Some(unsafe { self.list.remove(node) })
+    }
+}

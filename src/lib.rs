@@ -138,29 +138,25 @@ impl<T> ReversibleList<T> {
 
     /// Removes the element at the beginning of the list, should complete in _O_(1).
     pub fn pop_front(&mut self) -> Option<T> {
+        let first = self.start?;
         // SAFETY: Same as `Self::push_front`,
-        unsafe {
-            let first = self.start?;
-            Some(self.pop(first))
-        }
+        unsafe { Some(self.remove(first)) }
     }
 
     /// Removes the element at the end of the list, should complete in _O_(1).
     pub fn pop_back(&mut self) -> Option<T> {
+        let last = self.end?;
         // SAFETY: Same as `Self::push_back`.
-        unsafe {
-            let last = self.end?;
-            Some(self.pop(last))
-        }
+        unsafe { Some(self.remove(last)) }
     }
 
     /// Removes the given element by first deallocating the node, then unlinking it.
     ///
     /// # Safety
     ///
-    /// `ele` must be a valid, well-aligned pointer to a list element owned by this list.
-    unsafe fn pop(&mut self, ele: Pointer<T>) -> T {
-        let (before_ele, after_ele) = retrieve_paired_elements(ele, Pair::Surrounding);
+    /// `node` must be a valid, well-aligned pointer to a list element owned by this list.
+    unsafe fn remove(&mut self, node: Pointer<T>) -> T {
+        let (before_ele, after_ele) = retrieve_paired_elements(node, Pair::Surrounding);
 
         // unlink it from the previous elements
         // there's 3 cases:
@@ -190,7 +186,7 @@ impl<T> ReversibleList<T> {
         self.len -= 1;
 
         // reboxed will be dropped at the end of the scope -- and deallocate the Node
-        let reboxed = Box::from_raw(ele.as_ptr());
+        let reboxed = Box::from_raw(node.as_ptr());
         reboxed.data
     }
 }
