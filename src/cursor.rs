@@ -77,6 +77,12 @@ macro_rules! impl_common_cursor {
                 self.node.map(|node| unsafe { &(*node.as_ptr()).data })
             }
 
+            /// Returns the index of the current node, or `None` if the list is empty.
+            pub fn index(&self) -> Option<usize> {
+                let _ = self.node?;
+                Some(self.index)
+            }
+
             /// Makes this cursor look at the **previous** node in the list. If there is none, the cursor will
             /// point at the **end** of the list. Does nothing if the list is empty.
             pub fn move_prev(&mut self) {
@@ -196,15 +202,18 @@ impl<'a, T: 'a> UndistortedCursorMut<'a, T> {
     /// Removes the current node and returns the data that was stored on it. Returns `None`
     /// if the list is empty.
     ///
-    /// If the list only contains one node, the cursor will point into the dark
-    /// afterwards, the
+    /// - If there is a node **after** the removed one, the cursor will point at that one.
+    /// - If the cursor is at the end of the list, the cursor will point at the node
+    ///   **before** the removed one.
+    /// - If the list only contains **one** node, the cursor will point "nowhere", since the
+    ///   list will be empty.
     pub fn remove_current(&mut self) -> Option<T> {
         // SAFETY: Delegated to the unsafe contract of `new_front`/`new_back`, the
-        // pointer is updated appropiately afterwards.
-        let node = dbg!(self.node?);
+        // pointer is updated appropiately.
+        let node = self.node?;
 
         let node_ref = unsafe { node.as_ref() };
-        self.node = match dbg!(node_ref.prev, node_ref.next) {
+        self.node = match (node_ref.prev, node_ref.next) {
             // start/mid of the list; index stays the same
             (_, Some(next)) => Some(next),
             // end of the list; index needs to move one node backward
@@ -215,7 +224,6 @@ impl<'a, T: 'a> UndistortedCursorMut<'a, T> {
             // list only contains only one element; index must be already 0
             (None, None) => None,
         };
-        dbg!(self.node);
 
         Some(unsafe { self.list.remove(node) })
     }

@@ -115,8 +115,10 @@ fn curious_cursors() {
     player.insert_before("cookies");
     player.move_prev();
     assert_eq!(player.remove_current(), Some("cookies"));
+    assert_eq!(player.index(), Some(1));
 
     player.remove_current().unwrap();
     player.remove_current().unwrap();
     assert_eq!(player.remove_current(), None);
+    assert_eq!(player.index(), None);
 }
