@@ -1,7 +1,7 @@
 //! Cursors into the linked list, movable back and forth.
 //!
 //! This mimics the cursor design of [`std`]'s [`LinkedList`], even though its documentation is
-//! out-of-sync with the implementation at the time of writing.
+//! out-of-sync with the implementation.
 //!
 //! A cursor is a pointer to one element in a linked list. This pointer can move one element forward
 //! with [`move_front`] and one element backward with [`move_back`]. Similarly, the node the
@@ -14,15 +14,12 @@
 //!
 //! One last thing, there are multiple cursor types:
 //!
-//! - [`UndistortedCursor`] and [`Cursor`] are _immutable_, and cannot change the list, only observe
+//! - [`Cursor`] are _immutable_, and cannot change the list, only observe
 //!   it. There can exist **multiple** of these at any given timepoint, given that no mutable
 //!   cursor/reference exists.
-//! - [`UndistortedCursorMut`] and [`CursorMut`] are _mutable_, allowing modification of the list.
+//! - [`CursorMut`] are _mutable_, allowing modification of the list.
 //!   However, there can exist only **one** these at any given timepoint, thus they conflict with
 //!   the immutable ones.
-//! - The "normal" ones **without** prefix respect the calls made to [`ReversibleList::reverse`],
-//!   while the ones **with** `UndistortedCursor` ignore them completely (which might cause
-//!   elements to end up at unexpected positions).
 //!
 //! [`LinkedList`]: std::collections::LinkedList
 //! [`move_back`]: Cursor::move_back
@@ -38,9 +35,10 @@ use std::cmp::{
 
 use crate::{Direction, MaybePointer, ReversibleList};
 
-/// Immutable edition. **Ignores** any past calls to [`ReversibleList::reverse`], like
-/// [`ReversibleList::undistorted_iter`], see its documentation for details.
-pub struct UndistortedCursor<'a, T> {
+/// Immutable edition.
+///
+/// See the module docs for details.
+pub struct Cursor<'a, T> {
     node: MaybePointer<T>,
     index: usize,
     list: &'a ReversibleList<T>,
@@ -139,7 +137,16 @@ macro_rules! impl_common_cursor {
             }
 
             /// Moves this cursor to the given absolute list index.
+            ///
+            /// # Panics
+            ///
+            /// Panics if the given `target_idx` is invalid (in effect larger or equal to the
+            /// length of the list).
             pub fn move_to(&mut self, target_idx: usize) {
+                if self.list.len <= target_idx {
+                    panic!("tried to move to index {target_idx} but the len is {}", self.list.len);
+                }
+
                 // check if wrapping or going straight through the list is shorter
                 let direct_distance = self.index.abs_diff(target_idx);
                 let wrapping_distance = cmp::min(self.index, target_idx)
@@ -160,19 +167,20 @@ macro_rules! impl_common_cursor {
     };
 }
 
-impl_common_cursor!(UndistortedCursor);
+impl_common_cursor!(Cursor);
 
-/// Mutable edition. **Ignores** any past calls to [`ReversibleList::reverse`], like
-/// [`ReversibleList::undistorted_iter`], see its documentation for details.
-pub struct UndistortedCursorMut<'a, T> {
+/// Mutable edition.
+///
+/// See the module docs for details.
+pub struct CursorMut<'a, T> {
     node: MaybePointer<T>,
     index: usize,
     list: &'a mut ReversibleList<T>,
 }
 
-impl_common_cursor!(UndistortedCursorMut mut);
+impl_common_cursor!(CursorMut mut);
 
-impl<'a, T: 'a> UndistortedCursorMut<'a, T> {
+impl<'a, T: 'a> CursorMut<'a, T> {
     /// Returns a mutable reference to the data stored on the current node, or `None` if the
     /// list is empty.
     pub fn current_mut(&mut self) -> Option<&mut T> {

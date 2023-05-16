@@ -22,7 +22,7 @@ use std::marker::PhantomData;
 
 use crate::MaybePointer;
 
-pub struct UndistortedIter<'list, T: 'list> {
+pub struct Iter<'list, T: 'list> {
     forward_node: MaybePointer<T>,
     backward_node: MaybePointer<T>,
     finished: bool,
@@ -35,7 +35,7 @@ enum Direction {
     Backward,
 }
 
-impl<'list, T: 'list> UndistortedIter<'list, T> {
+impl<'list, T: 'list> Iter<'list, T> {
     /// # Safety
     ///
     /// The caller must ensure that the given two nodes are start and end of a valid linked
@@ -79,7 +79,7 @@ impl<'list, T: 'list> UndistortedIter<'list, T> {
     }
 }
 
-impl<'list, T: 'list> Iterator for UndistortedIter<'list, T> {
+impl<'list, T: 'list> Iterator for Iter<'list, T> {
     type Item = &'list T;
 
     fn next(&mut self) -> Option<&'list T> {
@@ -87,7 +87,7 @@ impl<'list, T: 'list> Iterator for UndistortedIter<'list, T> {
     }
 }
 
-impl<'list, T: 'list> DoubleEndedIterator for UndistortedIter<'list, T> {
+impl<'list, T: 'list> DoubleEndedIterator for Iter<'list, T> {
     fn next_back(&mut self) -> Option<&'list T> {
         self.next_in_dir(Direction::Backward)
     }

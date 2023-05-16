@@ -42,53 +42,42 @@ impl<T> ReversibleList<T> {
     }
 
     /// Returns an iterator through this list.
-    pub fn iter(&self) -> iter::UndistortedIter<'_, T> {
-        // TODO: this is currently just an alias since I don't want to update all those consumer
-        //       methods afterwards; change this once jumps are implemented
-        self.undistorted_iter()
-    }
-
-    /// Returns an iterator through this list while **ignoring** any past calls to
-    /// [`Self::reverse`], which might lead to unexpected element positions. This
-    /// representation is also **not** preserved when cloning the list.
-    #[must_use]
-    pub fn undistorted_iter(&self) -> iter::UndistortedIter<'_, T> {
+    pub fn iter(&self) -> iter::Iter<'_, T> {
         // SAFETY: '_ is the lifetime of this list reference
         //         and `Iter` is bound by it --- will not ever be leaked
         //         pointers are only mutated through `Self::insert_in_dir` and
         //         `Self::pop`, which both preserve a valid linked list
-        unsafe { iter::UndistortedIter::new(self.start, self.end) }
+        unsafe { iter::Iter::new(self.start, self.end) }
     }
 
-    /// Creates a cursor pointing at the **first** node in the list. Note that this
-    /// representation **ignores** any previous calls to [`Self::reverse`]
-    pub fn undistorted_cursor_front(&self) -> cursor::UndistortedCursor<'_, T> {
-        // SAFETY: Same as `Self::undistorted_iter`.
-        unsafe { cursor::UndistortedCursor::new_front(self) }
+    /// Creates a cursor pointing at the **first** node in the list.
+    pub fn cursor_front(&self) -> cursor::Cursor<'_, T> {
+        // SAFETY: Same as `Self::iter`.
+        unsafe { cursor::Cursor::new_front(self) }
     }
 
-    /// Creates a cursor pointing at the **last** node in the list. Note that this
-    /// representation **ignores** any previous calls to [`Self::reverse`]
-    pub fn undistorted_cursor_back(&self) -> cursor::UndistortedCursor<'_, T> {
-        // SAFETY: Same as `Self::undistorted_iter`.
-        unsafe { cursor::UndistortedCursor::new_back(self) }
+    /// Creates a cursor pointing at the **last** node in the list.
+    pub fn cursor_back(&self) -> cursor::Cursor<'_, T> {
+        // SAFETY: Same as `Self::iter`.
+        unsafe { cursor::Cursor::new_back(self) }
     }
 
-    pub fn undistorted_cursor_front_mut(&mut self) -> cursor::UndistortedCursorMut<'_, T> {
-        // SAFETY: Same as `Self::undistorted_iter`.
-        unsafe { cursor::UndistortedCursorMut::new_front(self) }
-    }
-
-    pub fn undistorted_cursor_back_mut(&mut self) -> cursor::UndistortedCursorMut<'_, T> {
-        // SAFETY: Same as `Self::undistorted_iter`.
-        unsafe { cursor::UndistortedCursorMut::new_back(self) }
-    }
-
-    pub fn undistorted_cursor_at(&self, idx: usize) -> cursor::UndistortedCursor<'_, T> {
-        // SAFETY: Same as `Self::undistorted_iter`.
-        let mut cursor = unsafe { cursor::UndistortedCursor::new_back(self) };
+    /// Creates a cursor pointing at node with the given index in the list.
+    pub fn cursor_at(&self, idx: usize) -> cursor::Cursor<'_, T> {
+        // SAFETY: Same as `Self::iter`.
+        let mut cursor = unsafe { cursor::Cursor::new_back(self) };
         cursor.move_to(idx);
         cursor
+    }
+
+    pub fn cursor_mut_front(&mut self) -> cursor::CursorMut<'_, T> {
+        // SAFETY: Same as `Self::iter`.
+        unsafe { cursor::CursorMut::new_front(self) }
+    }
+
+    pub fn cursor_mut_back(&mut self) -> cursor::CursorMut<'_, T> {
+        // SAFETY: Same as `Self::iter`.
+        unsafe { cursor::CursorMut::new_back(self) }
     }
 
     /// Appends the given item to the end of the list, should complete in _O_(1).
@@ -251,19 +240,15 @@ fn allocate<T>(item: T) -> NonNull<T> {
 
 impl<T: Clone> Clone for ReversibleList<T> {
     fn clone(&self) -> Self {
-        // TODO: think about if a clone implying a normalize is really okay, maybe normalize should
-        //       be its own function instead, and `Clone` really a per-value clone
-        //       then there could be another function that clones *and* normalizes
-        //       (what's done here at the moment)
         self.iter().map(Clone::clone).collect()
     }
 
-    // TODO: optimized clone_from
+    // TODO: optimized clone_from, someday...
 }
 
 impl<T: fmt::Debug> fmt::Debug for ReversibleList<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list().entries(self.undistorted_iter()).finish()
+        f.debug_list().entries(self.iter()).finish()
     }
 }
 
@@ -277,7 +262,7 @@ impl<T> Drop for ReversibleList<T> {
     fn drop(&mut self) {
         // just create a cursor and remove elements until it is empty
         // the cursor advances to the next element automatically
-        let mut cursor = self.undistorted_cursor_front_mut();
+        let mut cursor = self.cursor_mut_front();
         while cursor.remove_current().is_some() {}
     }
 }
@@ -286,7 +271,7 @@ impl<T> Extend<T> for ReversibleList<T> {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         // distortions caused by Self::reverse are only applicable on a finite range
         // so extending a ReversibleList *always* ends up at the absolute end, either way
-        let mut back_cursor = self.undistorted_cursor_back_mut();
+        let mut back_cursor = self.cursor_mut_back();
 
         for item in iter {
             back_cursor.insert_after(item);
@@ -326,7 +311,7 @@ impl<T: Hash> Hash for ReversibleList<T> {
 
 impl<T: PartialEq> PartialEq for ReversibleList<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.iter().eq(other.undistorted_iter())
+        self.iter().eq(other.iter())
     }
 }
 
@@ -334,12 +319,12 @@ impl<T: Eq> Eq for ReversibleList<T> {}
 
 impl<T: PartialOrd> PartialOrd for ReversibleList<T> {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        self.iter().partial_cmp(other.undistorted_iter())
+        self.iter().partial_cmp(other.iter())
     }
 }
 
 impl<T: Ord> Ord for ReversibleList<T> {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.iter().cmp(other.undistorted_iter())
+        self.iter().cmp(other.iter())
     }
 }
