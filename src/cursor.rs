@@ -190,6 +190,17 @@ impl<'a, T: 'a> CursorMut<'a, T> {
         self.node.map(|node| unsafe { &mut (*node.as_ptr()).data })
     }
 
+    /// Returns an immutable [`Cursor`] at the same position as this cursor. Note that this cursor
+    /// will be frozen and unusable until the returned cursor (and all its clones and returned
+    /// references) have been dropped.
+    pub fn cursor(&self) -> Cursor<'_, T> {
+        Cursor {
+            node: self.node,
+            index: self.index,
+            list: self.list,
+        }
+    }
+
     /// Inserts the given item **after** the current node, creating a new node between the
     /// current one and the currently next one.
     pub fn insert_after(&mut self, item: T) {

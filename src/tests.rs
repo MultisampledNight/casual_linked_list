@@ -43,10 +43,7 @@ fn snake_and_reverse() {
 
     snake.push_front(1);
 
-    assert_eq!(
-        snake.iter().sum::<i32>(),
-        snake.iter().rev().sum()
-    );
+    assert_eq!(snake.iter().sum::<i32>(), snake.iter().rev().sum());
     assert_eq!(
         snake.iter().copied().collect::<Vec<_>>(),
         vec![1, -45, 10, 1_000_000]
@@ -149,7 +146,7 @@ fn standard_traits() {
     let mut composited = ReversibleList::from(["this"]);
     composited.extend(["is", "a", "sentence"]);
     assert_eq!(cloned, composited);
-    
+
     let from_vec = ReversibleList::from(vec!["this", "is", "a", "sentence"]);
     assert_eq!(composited, from_vec);
 

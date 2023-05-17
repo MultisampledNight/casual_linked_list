@@ -4,7 +4,11 @@ mod tests;
 pub mod cursor;
 pub mod iter;
 
-use std::{cmp, fmt, ptr::NonNull, hash::{Hash, Hasher}};
+use std::{
+    cmp, fmt,
+    hash::{Hash, Hasher},
+    ptr::NonNull,
+};
 
 type Pointer<T> = NonNull<Node<T>>;
 type MaybePointer<T> = Option<Pointer<T>>;
