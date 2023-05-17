@@ -3,4 +3,5 @@ name    = "casual_linked_list"
 version = "0.1.0"
 edition = "2021"
 exclude = ["doc/*"]
+license = "MIT OR Apache-2.0"
 
