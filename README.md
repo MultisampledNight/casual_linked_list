@@ -14,6 +14,10 @@ In addition, you're very much advised to explicitly specify a `rev` commit to ch
 
 ## Any questions?
 
+### Could this be `no_std`?
+
+Yes, _but_ it would require `alloc` for actually allocating the nodes.
+
 ### why
 
 **Originally** I intended to implement a linked list where subslices can be reversed in _O_(1), and iteration taking _O_(_n_ + _r_), where _n_ is the list length and _r_ is the number of subslice reversals done. One reversal between two found nodes `A` and `B` would be then just adding a so-called "jump" from `A` to `B` on eachs "jump stacks", and the other way around. When iterating, the algorithm would (_\*sarcastic inhale\*_) _simply_ follow these jumps, track with a stack on which depth it is at the moment and track with another hashmap on how deep it is in each jump stack.
