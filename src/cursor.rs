@@ -38,6 +38,7 @@ use crate::{Direction, MaybePointer, ReversibleList};
 /// Immutable edition.
 ///
 /// See the module docs for details.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Cursor<'a, T> {
     node: MaybePointer<T>,
     index: usize,
@@ -172,6 +173,7 @@ impl_common_cursor!(Cursor);
 /// Mutable edition.
 ///
 /// See the module docs for details.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CursorMut<'a, T> {
     node: MaybePointer<T>,
     index: usize,
