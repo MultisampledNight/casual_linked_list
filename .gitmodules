@@ -1,0 +1,3 @@
+[submodule "doc/typst-canvas"]
+	path = doc/typst-canvas
+	url = https://github.com/johannes-wolf/typst-canvas.git
